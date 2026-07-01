@@ -26,9 +26,8 @@ function getMiradorBase(): string {
  */
 function getMiradorHeaders(): Record<string, string> {
   return {
+    'Authorization': `Bearer ${API_KEY}`,
     'Content-Type': 'application/json',
-    'X-API-Key': API_KEY,
-    'X-Instance-Name': SITE_NAME,
   };
 }
 
@@ -48,6 +47,11 @@ function isAppleDevice(record: MiradoreDeviceRecord): boolean {
   const model = getStringField(record, ['model', 'Model', 'friendlyName', 'FriendlyName']);
   const probe = `${manufacturer} ${model}`.toLowerCase();
   return probe.includes('apple') || probe.includes('iphone') || probe.includes('ipad');
+}
+
+function isAndroidDevice(record: MiradoreDeviceRecord): boolean {
+  // Android = anything that is not an Apple device
+  return !isAppleDevice(record);
 }
 
 function isAssigned(record: MiradoreDeviceRecord): boolean {
@@ -76,18 +80,21 @@ function normalizeMiradoreCollection(payload: unknown): MiradoreDeviceRecord[] {
 }
 
 /**
- * Fetch Apple hardware that exists in Miradore but has not been assigned to a user.
+ * Fetch devices of a given platform that exist in Miradore but are not yet assigned to a user.
  *
  * Uses GET /api/v2/Device
  * Device schema fields (camelCase in v2):
  *   id (integer), manufacturer, model, identifier (serial/IMEI), userEmailAddress, friendlyName
  */
-export async function fetchUnassignedAppleDevices(): Promise<MiradoreUnassignedDevice[]> {
+export async function fetchUnassignedDevicesByPlatform(
+  platform: 'android' | 'ios'
+): Promise<MiradoreUnassignedDevice[]> {
   if (!SITE_NAME || !API_KEY) {
     throw new Error('Miradore credentials not configured.');
   }
 
-  const endpoint = `${getMiradorBase()}/Device`;
+  // Changed to User/DeviceIdentifier as per Swagger analysis
+  const endpoint = `${getMiradorBase()}/User/DeviceIdentifier`;
   const response = await fetch(endpoint, {
     method: 'GET',
     headers: getMiradorHeaders(),
@@ -101,17 +108,25 @@ export async function fetchUnassignedAppleDevices(): Promise<MiradoreUnassignedD
 
   const records = normalizeMiradoreCollection(await response.json());
 
+  // We remove platform filtering because DeviceIdentifier doesn't return manufacturer/OS
+  // The UI will show all unmapped identifiers; Supabase ensures already mapped ones are hidden.
   return records
-    .filter((record) => isAppleDevice(record) && !isAssigned(record))
     .map((record) => ({
-      // v2 schema: id is an integer — convert to string for our use
-      id: getStringField(record, ['id', 'Id', 'ID']),
-      // v2 schema: identifier holds serial/IMEI
-      serial: getStringField(record, ['identifier', 'Identifier', 'SerialNumber', 'serialNumber', 'Serial', 'serial']),
-      // v2 schema: model or friendlyName
-      model: getStringField(record, ['model', 'Model', 'friendlyName', 'FriendlyName']),
+      // Extract from typical DeviceIdentifier schema fields
+      id: getStringField(record, ['id', 'Id', 'ID', 'deviceId', 'DeviceId']),
+      serial: getStringField(record, ['identifier', 'Identifier', 'value', 'Value', 'serialNumber', 'SerialNumber']),
+      // Default to "Unknown Model" as this endpoint usually doesn't provide it
+      model: getStringField(record, ['model', 'Model', 'friendlyName', 'FriendlyName']) || 'Unknown Model (Check Miradore)',
     }))
     .filter((device) => device.id && device.serial);
+}
+
+/**
+ * Convenience wrapper — fetches unassigned Apple devices only.
+ * Kept for backward compatibility with existing call sites.
+ */
+export async function fetchUnassignedAppleDevices(): Promise<MiradoreUnassignedDevice[]> {
+  return fetchUnassignedDevicesByPlatform('ios');
 }
 
 /**

@@ -23,7 +23,9 @@ import { toast } from 'sonner';
 import type { Customer, OsPlatform, PaymentCycle, ResidentialStatus } from '@/types';
 
 type Workflow = 'Android' | 'iOS';
-type StepId = 'device' | 'identity' | 'contact' | 'location' | 'work';
+type StepId = 'qr' | 'device' | 'identity' | 'contact' | 'location' | 'work';
+
+type StepDef = { id: StepId; label: string; icon: React.ReactNode };
 
 type UnassignedDevice = {
   id: string;
@@ -88,7 +90,18 @@ const emptyForm: RegisterForm = {
   total_owed: '',
 };
 
-const steps: { id: StepId; label: string; icon: React.ReactNode }[] = [
+// Android gets 6 steps: QR Enrollment → Device → Identity → Contact → Location → Work
+const androidSteps: StepDef[] = [
+  { id: 'qr', label: 'QR Enrollment', icon: <QrCode size={15} /> },
+  { id: 'device', label: 'Device', icon: <Smartphone size={15} /> },
+  { id: 'identity', label: 'Identity', icon: <FileBadge size={15} /> },
+  { id: 'contact', label: 'Contact', icon: <Contact size={15} /> },
+  { id: 'location', label: 'Location', icon: <Home size={15} /> },
+  { id: 'work', label: 'Work', icon: <BriefcaseBusiness size={15} /> },
+];
+
+// iOS keeps 5 steps: Device → Identity → Contact → Location → Work
+const iosSteps: StepDef[] = [
   { id: 'device', label: 'Device', icon: <Smartphone size={15} /> },
   { id: 'identity', label: 'Identity', icon: <FileBadge size={15} /> },
   { id: 'contact', label: 'Contact', icon: <Contact size={15} /> },
@@ -106,17 +119,26 @@ export default function DeviceOnboardingPage() {
   const [stepIndex, setStepIndex] = useState(0);
   const [androidForm, setAndroidForm] = useState<RegisterForm>(emptyForm);
   const [iosForm, setIosForm] = useState<RegisterForm>(emptyForm);
+
+  // Devices fetched from Miradore (filtered by platform, cross-checked against Nexora DB)
+  const [androidDevices, setAndroidDevices] = useState<UnassignedDevice[]>([]);
   const [iosDevices, setIosDevices] = useState<UnassignedDevice[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [fetchingDevices, setFetchingDevices] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [lastCustomer, setLastCustomer] = useState<Customer | null>(null);
 
+  // QR enrollment confirmation gate (Android only)
+  const [qrConfirmed, setQrConfirmed] = useState(false);
+
+  const activeSteps = workflow === 'Android' ? androidSteps : iosSteps;
   const activeForm = workflow === 'Android' ? androidForm : iosForm;
-  const currentStep = steps[stepIndex];
-  const selectedIosDevice = useMemo(
-    () => iosDevices.find((device) => device.id === selectedDeviceId) ?? null,
-    [iosDevices, selectedDeviceId]
+  const activeDevices = workflow === 'Android' ? androidDevices : iosDevices;
+  const currentStep = activeSteps[stepIndex];
+
+  const selectedDevice = useMemo(
+    () => activeDevices.find((device) => device.id === selectedDeviceId) ?? null,
+    [activeDevices, selectedDeviceId]
   );
 
   const updateForm = (platform: Workflow, field: keyof RegisterForm, value: string | File | null) => {
@@ -125,10 +147,14 @@ export default function DeviceOnboardingPage() {
   };
 
   const validateStep = (step: StepId) => {
+    if (step === 'qr') {
+      if (!qrConfirmed) return 'Confirm that you have completed the Android Enterprise setup on the device.';
+    }
+
     if (step === 'device') {
-      if (!activeForm.device_model || !activeForm.miradore_device_id || !activeForm.total_owed) return 'Complete the device model, device ID, and financed amount.';
+      if (!selectedDeviceId) return `Select an unassigned ${workflow} device from the list.`;
+      if (!activeForm.total_owed) return 'Enter the total financed amount.';
       if (!Number.isFinite(Number(activeForm.total_owed)) || Number(activeForm.total_owed) <= 0) return 'Total financed amount must be a positive number.';
-      if (workflow === 'iOS' && !selectedDeviceId) return 'Select an unassigned Apple device.';
     }
 
     if (step === 'identity') {
@@ -158,20 +184,26 @@ export default function DeviceOnboardingPage() {
       toast.error(error);
       return;
     }
-    setStepIndex((prev) => Math.min(prev + 1, steps.length - 1));
+    setStepIndex((prev) => Math.min(prev + 1, activeSteps.length - 1));
   };
 
   const fetchUnassignedDevices = async () => {
     setFetchingDevices(true);
+    const platform = workflow === 'Android' ? 'android' : 'ios';
     try {
-      const response = await fetch('/api/devices/unassigned', { method: 'GET' });
+      const response = await fetch(`/api/devices/unassigned?platform=${platform}`, { method: 'GET' });
       const result = await response.json() as UnassignedResponse;
 
       if (!response.ok || !result.success) throw new Error(result.error ?? 'Unable to fetch unassigned devices.');
 
-      setIosDevices(result.data ?? []);
+      const devices = result.data ?? [];
+      if (workflow === 'Android') {
+        setAndroidDevices(devices);
+      } else {
+        setIosDevices(devices);
+      }
       setSelectedDeviceId('');
-      toast.success(`${result.data?.length ?? 0} unassigned Apple device${result.data?.length === 1 ? '' : 's'} found.`);
+      toast.success(`${devices.length} unassigned ${workflow} device${devices.length === 1 ? '' : 's'} found.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to fetch unassigned devices.');
     } finally {
@@ -227,10 +259,11 @@ export default function DeviceOnboardingPage() {
 
       if (workflow === 'Android') {
         setAndroidForm(emptyForm);
+        setAndroidDevices((prev) => prev.filter((device) => device.id !== selectedDeviceId));
+        setQrConfirmed(false);
       } else {
         setIosForm(emptyForm);
         setIosDevices((prev) => prev.filter((device) => device.id !== selectedDeviceId));
-        setSelectedDeviceId('');
 
         if (data.miradoreSync.attempted && !data.miradoreSync.success) {
           toast.warning(`Registered, but Miradore asset sync failed: ${data.miradoreSync.error ?? 'Unknown error'}`);
@@ -238,6 +271,7 @@ export default function DeviceOnboardingPage() {
         }
       }
 
+      setSelectedDeviceId('');
       setStepIndex(0);
       toast.success(`${data.customer.device_model} registered to ${data.customer.full_name}.`);
     } catch (submitError) {
@@ -247,10 +281,11 @@ export default function DeviceOnboardingPage() {
     }
   };
 
-  const handleIosDeviceSelect = (id: string) => {
-    const device = iosDevices.find((item) => item.id === id);
+  const handleDeviceSelect = (id: string) => {
+    const device = activeDevices.find((item) => item.id === id);
     setSelectedDeviceId(id);
-    setIosForm((prev) => ({
+    const setter = workflow === 'Android' ? setAndroidForm : setIosForm;
+    setter((prev) => ({
       ...prev,
       device_model: device?.model ?? '',
       miradore_device_id: device?.id ?? '',
@@ -282,6 +317,8 @@ export default function DeviceOnboardingPage() {
                 setWorkflow(item);
                 setStepIndex(0);
                 setLastCustomer(null);
+                setSelectedDeviceId('');
+                if (item === 'Android') setQrConfirmed(false);
               }}
               className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all
                 ${workflow === item ? 'bg-blue-600 text-white shadow-[0_4px_16px_rgba(37,99,235,0.25)]' : 'text-slate-400 hover:text-white'}
@@ -295,27 +332,34 @@ export default function DeviceOnboardingPage() {
       </div>
 
       <div className="space-y-5">
-        <Stepper stepIndex={stepIndex} onStepChange={setStepIndex} />
+        <Stepper steps={activeSteps} stepIndex={stepIndex} onStepChange={setStepIndex} />
         <section className="rounded-2xl border border-white/8 bg-[#111827] p-5">
           <form onSubmit={submitActiveWorkflow} className="space-y-5">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase text-blue-400">Step {stepIndex + 1} of {steps.length}</p>
+                <p className="text-xs font-semibold uppercase text-blue-400">Step {stepIndex + 1} of {activeSteps.length}</p>
                 <h2 className="text-lg font-semibold text-white">{currentStep.label}</h2>
               </div>
               <span className="text-sm text-slate-500">{workflow} onboarding</span>
             </div>
+
+            {currentStep.id === 'qr' && (
+              <QrEnrollmentStep
+                confirmed={qrConfirmed}
+                onConfirmChange={setQrConfirmed}
+              />
+            )}
 
             {currentStep.id === 'device' && (
               <DeviceStep
                 workflow={workflow}
                 form={activeForm}
                 selectedDeviceId={selectedDeviceId}
-                selectedIosDevice={selectedIosDevice}
-                iosDevices={iosDevices}
+                selectedDevice={selectedDevice}
+                devices={activeDevices}
                 fetchingDevices={fetchingDevices}
-                onFetchIosDevices={fetchUnassignedDevices}
-                onSelectIosDevice={handleIosDeviceSelect}
+                onFetchDevices={fetchUnassignedDevices}
+                onSelectDevice={handleDeviceSelect}
                 onChange={(field, value) => updateForm(workflow, field, value)}
               />
             )}
@@ -373,7 +417,7 @@ export default function DeviceOnboardingPage() {
                 Back
               </button>
 
-              {stepIndex < steps.length - 1 ? (
+              {stepIndex < activeSteps.length - 1 ? (
                 <button
                   type="button"
                   onClick={goNext}
@@ -413,10 +457,14 @@ export default function DeviceOnboardingPage() {
   );
 }
 
+/* ─── Stepper ────────────────────────────────────────────────────────────────── */
+
 function Stepper({
+  steps,
   stepIndex,
   onStepChange,
 }: {
+  steps: StepDef[];
   stepIndex: number;
   onStepChange: (index: number) => void;
 }) {
@@ -464,114 +512,160 @@ function Stepper({
   );
 }
 
+/* ─── QR Enrollment Step (Android only) ──────────────────────────────────────── */
+
+function QrEnrollmentStep({
+  confirmed,
+  onConfirmChange,
+}: {
+  confirmed: boolean;
+  onConfirmChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 md:grid-cols-[180px_minmax(0,1fr)]">
+        <div className="rounded-xl border border-emerald-500/20 bg-white p-3">
+          {androidQrImage ? (
+            <div
+              role="img"
+              aria-label="Android Enterprise enrollment QR"
+              className="aspect-square w-full bg-contain bg-center bg-no-repeat"
+              style={{ backgroundImage: `url(${androidQrImage})` }}
+            />
+          ) : (
+            <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-lg bg-slate-50 text-slate-600">
+              <QrCode size={44} />
+              <span className="text-center text-xs font-semibold uppercase">QR not configured</span>
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col justify-center">
+          <h3 className="text-sm font-semibold text-white">Android Enterprise Enrollment</h3>
+          <p className="mt-1 text-sm text-slate-400">
+            Scan the QR code on the new Android device to begin the Android Enterprise setup. Complete all on-device configuration steps before continuing.
+          </p>
+          {androidQrPayload && (
+            <p className="mt-3 truncate rounded-lg bg-white/5 px-2 py-2 font-mono text-xs text-slate-500">{androidQrPayload}</p>
+          )}
+        </div>
+      </div>
+
+      <label
+        htmlFor="qr-confirmed"
+        className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition-all ${
+          confirmed
+            ? 'border-emerald-500/30 bg-emerald-500/10'
+            : 'border-white/8 bg-white/5 hover:border-white/15'
+        }`}
+      >
+        <div className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+          <input
+            id="qr-confirmed"
+            type="checkbox"
+            checked={confirmed}
+            onChange={(e) => onConfirmChange(e.target.checked)}
+            className="peer sr-only"
+          />
+          <div className={`h-5 w-5 rounded-md border-2 transition-all ${
+            confirmed
+              ? 'border-emerald-400 bg-emerald-500'
+              : 'border-slate-500 bg-white/5'
+          }`}>
+            {confirmed && <Check size={14} strokeWidth={3} className="text-white mx-auto mt-px" />}
+          </div>
+        </div>
+        <span className={`text-sm font-medium ${confirmed ? 'text-emerald-200' : 'text-slate-300'}`}>
+          I have scanned the QR code and completed the Android Enterprise setup on the device.
+        </span>
+      </label>
+    </div>
+  );
+}
+
+/* ─── Device Step (Shared by both workflows) ─────────────────────────────────── */
+
 function DeviceStep({
   workflow,
   form,
   selectedDeviceId,
-  selectedIosDevice,
-  iosDevices,
+  selectedDevice,
+  devices,
   fetchingDevices,
-  onFetchIosDevices,
-  onSelectIosDevice,
+  onFetchDevices,
+  onSelectDevice,
   onChange,
 }: {
   workflow: Workflow;
   form: RegisterForm;
   selectedDeviceId: string;
-  selectedIosDevice: UnassignedDevice | null;
-  iosDevices: UnassignedDevice[];
+  selectedDevice: UnassignedDevice | null;
+  devices: UnassignedDevice[];
   fetchingDevices: boolean;
-  onFetchIosDevices: () => void;
-  onSelectIosDevice: (id: string) => void;
+  onFetchDevices: () => void;
+  onSelectDevice: (id: string) => void;
   onChange: (field: keyof RegisterForm, value: string | File | null) => void;
 }) {
+  const platformLabel = workflow === 'Android' ? 'Android' : 'Apple';
+  const PlatformIcon = workflow === 'Android' ? Smartphone : Apple;
+
   return (
     <div className="space-y-5">
-      {workflow === 'Android' && (
-        <div className="grid gap-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 md:grid-cols-[180px_minmax(0,1fr)]">
-          <div className="rounded-xl border border-emerald-500/20 bg-white p-3">
-            {androidQrImage ? (
-              <div
-                role="img"
-                aria-label="Android Enterprise enrollment QR"
-                className="aspect-square w-full bg-contain bg-center bg-no-repeat"
-                style={{ backgroundImage: `url(${androidQrImage})` }}
-              />
-            ) : (
-              <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-lg bg-slate-50 text-slate-600">
-                <QrCode size={44} />
-                <span className="text-center text-xs font-semibold uppercase">QR not configured</span>
-              </div>
-            )}
+      <div className="space-y-3 rounded-xl border border-white/8 bg-white/5 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <PlatformIcon size={18} className="text-slate-300" />
+            <h3 className="text-sm font-semibold text-white">{platformLabel} Inventory</h3>
           </div>
-          <div className="flex flex-col justify-center">
-            <h3 className="text-sm font-semibold text-white">Android Enterprise Enrollment</h3>
-            <p className="mt-1 text-sm text-slate-400">
-              Scan the master QR code on the new Android device, then enter the device serial or IMEI below.
-            </p>
-            {androidQrPayload && (
-              <p className="mt-3 truncate rounded-lg bg-white/5 px-2 py-2 font-mono text-xs text-slate-500">{androidQrPayload}</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {workflow === 'iOS' && (
-        <div className="space-y-3 rounded-xl border border-white/8 bg-white/5 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Apple size={18} className="text-slate-300" />
-              <h3 className="text-sm font-semibold text-white">Apple Inventory</h3>
-            </div>
-            <button
-              type="button"
-              onClick={onFetchIosDevices}
-              disabled={fetchingDevices}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/8 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300 transition-all hover:bg-white/10 disabled:opacity-60"
-            >
-              {fetchingDevices ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              Fetch
-            </button>
-          </div>
-
-          <select
-            id="ios-device"
-            value={selectedDeviceId}
-            onChange={(event) => onSelectIosDevice(event.target.value)}
+          <button
+            type="button"
+            onClick={onFetchDevices}
             disabled={fetchingDevices}
-            className="w-full rounded-xl border border-white/10 bg-[#0D1526] px-3 py-3 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/8 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300 transition-all hover:bg-white/10 disabled:opacity-60"
           >
-            <option value="">Select discovered hardware</option>
-            {iosDevices.map((device) => (
-              <option key={device.id} value={device.id}>
-                {device.serial} - {device.model}
-              </option>
-            ))}
-          </select>
-
-          {selectedIosDevice ? (
-            <div className="rounded-xl border border-white/8 bg-white/5 p-3">
-              <p className="text-sm font-semibold text-white">{selectedIosDevice.model}</p>
-              <p className="mt-1 text-xs text-slate-500">Serial: {selectedIosDevice.serial}</p>
-              <p className="mt-1 text-xs text-slate-500">Miradore ID: {selectedIosDevice.id}</p>
-            </div>
-          ) : (
-            <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
-              <AlertCircle size={16} className="mt-0.5 shrink-0" />
-              <span>No Apple device selected.</span>
-            </div>
-          )}
+            {fetchingDevices ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Fetch Devices
+          </button>
         </div>
-      )}
+
+        <select
+          id={`${workflow.toLowerCase()}-device`}
+          value={selectedDeviceId}
+          onChange={(event) => onSelectDevice(event.target.value)}
+          disabled={fetchingDevices}
+          className="w-full rounded-xl border border-white/10 bg-[#0D1526] px-3 py-3 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+        >
+          <option value="">Select discovered hardware</option>
+          {devices.map((device) => (
+            <option key={device.id} value={device.id}>
+              {device.serial} - {device.model}
+            </option>
+          ))}
+        </select>
+
+        {selectedDevice ? (
+          <div className="rounded-xl border border-white/8 bg-white/5 p-3">
+            <p className="text-sm font-semibold text-white">{selectedDevice.model}</p>
+            <p className="mt-1 text-xs text-slate-500">Serial: {selectedDevice.serial}</p>
+            <p className="mt-1 text-xs text-slate-500">Miradore ID: {selectedDevice.id}</p>
+          </div>
+        ) : (
+          <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
+            <AlertCircle size={16} className="mt-0.5 shrink-0" />
+            <span>No {platformLabel} device selected.</span>
+          </div>
+        )}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Input id={`${workflow}-model`} label="Device Model" value={form.device_model} onChange={(value) => onChange('device_model', value)} disabled={workflow === 'iOS' && Boolean(selectedIosDevice)} required />
-        <Input id={`${workflow}-device-id`} label={workflow === 'Android' ? 'Serial / IMEI Number' : 'Miradore Device ID'} value={form.miradore_device_id} onChange={(value) => onChange('miradore_device_id', value)} disabled={workflow === 'iOS' && Boolean(selectedIosDevice)} required />
+        <Input id={`${workflow}-model`} label="Device Model" value={form.device_model} onChange={(value) => onChange('device_model', value)} disabled={Boolean(selectedDevice)} required />
+        <Input id={`${workflow}-device-id`} label="Miradore Device ID" value={form.miradore_device_id} onChange={(value) => onChange('miradore_device_id', value)} disabled={Boolean(selectedDevice)} required />
         <Input id={`${workflow}-total`} label="Total Financed Amount" type="number" min="1" step="1" value={form.total_owed} onChange={(value) => onChange('total_owed', value)} required />
       </div>
     </div>
   );
 }
+
+/* ─── Form primitives ────────────────────────────────────────────────────────── */
 
 function Input({
   id,
