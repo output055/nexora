@@ -4,21 +4,31 @@ const SITE_NAME = process.env.MIRADORE_SITE_NAME ?? '';
 const API_KEY = process.env.MIRADORE_API_KEY ?? '';
 
 export interface MiradoreUnassignedDevice {
-  id: string;
+  id: string;   // Miradore integer ID stored as string for our use
   serial: string;
   model: string;
 }
 
 type MiradoreDeviceRecord = Record<string, unknown>;
 
+/**
+ * Base URL for Miradore API v2.
+ * Format: https://online.miradore.com/{siteName}/api/v2
+ */
 function getMiradorBase(): string {
   return `https://online.miradore.com/${SITE_NAME}/api/v2`;
 }
 
+/**
+ * Required headers for all Miradore API v2 requests.
+ * - X-API-Key: authentication key
+ * - X-Instance-Name: site/tenant name (required on all routes per the Swagger spec)
+ */
 function getMiradorHeaders(): Record<string, string> {
   return {
     'Content-Type': 'application/json',
-    'Authorization': `ApiKey ${API_KEY}`,
+    'X-API-Key': API_KEY,
+    'X-Instance-Name': SITE_NAME,
   };
 }
 
@@ -32,35 +42,29 @@ function getStringField(record: MiradoreDeviceRecord, keys: string[]): string {
 }
 
 function isAppleDevice(record: MiradoreDeviceRecord): boolean {
-  const platform = getStringField(record, ['Platform', 'platform', 'OsPlatform', 'osPlatform', 'OperatingSystem', 'operatingSystem']);
-  const manufacturer = getStringField(record, ['Manufacturer', 'manufacturer', 'Vendor', 'vendor']);
-  const model = getStringField(record, ['Model', 'model', 'DeviceModel', 'deviceModel']);
-  const probe = `${platform} ${manufacturer} ${model}`.toLowerCase();
-  return probe.includes('ios') || probe.includes('iphone') || probe.includes('ipad') || probe.includes('apple');
+  // The v2 Device schema uses camelCase: manufacturer, model
+  // identifier contains the serial/IMEI
+  const manufacturer = getStringField(record, ['manufacturer', 'Manufacturer']);
+  const model = getStringField(record, ['model', 'Model', 'friendlyName', 'FriendlyName']);
+  const probe = `${manufacturer} ${model}`.toLowerCase();
+  return probe.includes('apple') || probe.includes('iphone') || probe.includes('ipad');
 }
 
 function isAssigned(record: MiradoreDeviceRecord): boolean {
-  const assignedUser = getStringField(record, [
-    'User',
-    'user',
-    'UserName',
-    'userName',
-    'AssignedUser',
-    'assignedUser',
-    'Owner',
-    'owner',
-    'Email',
-    'email',
-  ]);
-  return Boolean(assignedUser);
+  // The v2 Device schema uses userEmailAddress for the assigned user
+  const email = getStringField(record, ['userEmailAddress', 'UserEmailAddress', 'User', 'user']);
+  return Boolean(email);
 }
 
 function normalizeMiradoreCollection(payload: unknown): MiradoreDeviceRecord[] {
-  if (Array.isArray(payload)) return payload.filter((item): item is MiradoreDeviceRecord => item !== null && typeof item === 'object');
+  // Miradore v2 returns arrays directly or wrapped in a value/items key
+  if (Array.isArray(payload)) {
+    return payload.filter((item): item is MiradoreDeviceRecord => item !== null && typeof item === 'object');
+  }
 
   if (payload && typeof payload === 'object') {
     const record = payload as Record<string, unknown>;
-    for (const key of ['items', 'Items', 'data', 'Data', 'value', 'Value', 'devices', 'Devices']) {
+    for (const key of ['value', 'Value', 'items', 'Items', 'data', 'Data', 'devices', 'Devices']) {
       const value = record[key];
       if (Array.isArray(value)) {
         return value.filter((item): item is MiradoreDeviceRecord => item !== null && typeof item === 'object');
@@ -73,8 +77,10 @@ function normalizeMiradoreCollection(payload: unknown): MiradoreDeviceRecord[] {
 
 /**
  * Fetch Apple hardware that exists in Miradore but has not been assigned to a user.
- * The response normalizer accepts several Miradore collection shapes so the API
- * remains resilient across tenant/API casing differences.
+ *
+ * Uses GET /api/v2/Device
+ * Device schema fields (camelCase in v2):
+ *   id (integer), manufacturer, model, identifier (serial/IMEI), userEmailAddress, friendlyName
  */
 export async function fetchUnassignedAppleDevices(): Promise<MiradoreUnassignedDevice[]> {
   if (!SITE_NAME || !API_KEY) {
@@ -98,15 +104,19 @@ export async function fetchUnassignedAppleDevices(): Promise<MiradoreUnassignedD
   return records
     .filter((record) => isAppleDevice(record) && !isAssigned(record))
     .map((record) => ({
-      id: getStringField(record, ['ID', 'Id', 'id', 'DeviceID', 'DeviceId', 'deviceId']),
-      serial: getStringField(record, ['SerialNumber', 'serialNumber', 'Serial', 'serial', 'IMEI', 'imei']),
-      model: getStringField(record, ['Model', 'model', 'DeviceModel', 'deviceModel', 'Name', 'name']),
+      // v2 schema: id is an integer — convert to string for our use
+      id: getStringField(record, ['id', 'Id', 'ID']),
+      // v2 schema: identifier holds serial/IMEI
+      serial: getStringField(record, ['identifier', 'Identifier', 'SerialNumber', 'serialNumber', 'Serial', 'serial']),
+      // v2 schema: model or friendlyName
+      model: getStringField(record, ['model', 'Model', 'friendlyName', 'FriendlyName']),
     }))
     .filter((device) => device.id && device.serial);
 }
 
 /**
- * Best-effort Miradore asset note update after an iOS customer registration.
+ * Best-effort update of the device's friendlyName in Miradore after an iOS customer registration.
+ * Uses PATCH /api/v2/Device/{id} — partial update, only given fields are overwritten.
  * Registration succeeds even if this optional synchronization fails.
  */
 export async function updateDeviceAssetOwner(deviceId: string, customerName: string): Promise<MiradoreResponse> {
@@ -118,10 +128,10 @@ export async function updateDeviceAssetOwner(deviceId: string, customerName: str
 
   try {
     const response = await fetch(endpoint, {
-      method: 'PATCH',
+      method: 'PATCH', // v2 Swagger spec: PATCH /Device/{id} = partial update
       headers: getMiradorHeaders(),
       body: JSON.stringify({
-        Notes: `Nexora customer: ${customerName}`,
+        friendlyName: `Nexora: ${customerName}`, // v2 Device schema field
       }),
     });
 
@@ -146,38 +156,42 @@ export async function updateDeviceAssetOwner(deviceId: string, customerName: str
 
 /**
  * Locks a device via Miradore MDM.
- * - iOS: Activates Lost Mode with notification message
- * - Android: Sends Device Lock command
+ *
+ * iOS: Enables Lost Mode via POST /api/v2/Device/{id}/LostMode
+ *   Body: LostModeConfiguration { message, phoneNumber, footnote, enableLocationTracking }
+ *
+ * Android: Locks device via POST /api/v2/Device/{id}/Lock
+ *   Body: none (Swagger spec defines no request body for Lock)
  */
 export async function lockDevice(
   deviceId: string,
   platform: OsPlatform,
-  payload: MiradoreDeviceLockPayload
+  lockPayload: MiradoreDeviceLockPayload
 ): Promise<MiradoreResponse> {
   if (!SITE_NAME || !API_KEY) {
     return { success: false, statusCode: 500, message: 'Miradore credentials not configured.' };
   }
 
-  const endpoint = `${getMiradorBase()}/Device/${encodeURIComponent(deviceId)}/Lock`;
+  // iOS uses Lost Mode (POST /LostMode), Android uses Lock (POST /Lock)
+  const endpoint = platform === 'iOS'
+    ? `${getMiradorBase()}/Device/${encodeURIComponent(deviceId)}/LostMode`
+    : `${getMiradorBase()}/Device/${encodeURIComponent(deviceId)}/Lock`;
 
-  // Build platform-specific payload
+  // iOS Lost Mode body uses v2 schema field names (camelCase)
   const body = platform === 'iOS'
     ? {
-        NotificationText: payload.NotificationText,
-        PhoneNumber: payload.PhoneNumber,
-        FootnoteText: payload.FootnoteText,
-        PlaySound: false,
+        message: lockPayload.NotificationText,       // LostModeConfiguration.message
+        phoneNumber: lockPayload.PhoneNumber,         // LostModeConfiguration.phoneNumber
+        footnote: lockPayload.FootnoteText,           // LostModeConfiguration.footnote
+        enableLocationTracking: false,
       }
-    : {
-        // Android Device Owner lock — minimal payload
-        LockMessage: payload.NotificationText,
-      };
+    : undefined; // Android Lock has no body per the Swagger spec
 
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: getMiradorHeaders(),
-      body: JSON.stringify(body),
+      ...(body !== undefined && { body: JSON.stringify(body) }),
     });
 
     if (response.ok) {
@@ -201,20 +215,35 @@ export async function lockDevice(
 
 /**
  * Unlocks a device via Miradore MDM.
- * Works for both iOS (clears Lost Mode) and Android (removes Device Lock).
+ *
+ * IMPORTANT: There is NO /Unlock endpoint in Miradore API v2.
+ *
+ * iOS: Disables Lost Mode via DELETE /api/v2/Device/{id}/LostMode
+ * Android: No API unlock available — device must be unlocked by user passcode on-device.
+ *          We still call DELETE /LostMode for consistency, it will gracefully fail for Android.
  */
-export async function unlockDevice(deviceId: string): Promise<MiradoreResponse> {
+export async function unlockDevice(deviceId: string, platform?: OsPlatform): Promise<MiradoreResponse> {
   if (!SITE_NAME || !API_KEY) {
     return { success: false, statusCode: 500, message: 'Miradore credentials not configured.' };
   }
 
-  const endpoint = `${getMiradorBase()}/Device/${encodeURIComponent(deviceId)}/Unlock`;
+  if (platform === 'Android') {
+    // Miradore API v2 has no remote unlock for Android — the device lock clears
+    // automatically once the user enters their passcode or the lock command expires.
+    return {
+      success: false,
+      statusCode: 422,
+      message: 'Android devices cannot be remotely unlocked via the Miradore API. The device unlocks when the user enters their passcode.',
+    };
+  }
+
+  // iOS: disable Lost Mode via DELETE /LostMode
+  const endpoint = `${getMiradorBase()}/Device/${encodeURIComponent(deviceId)}/LostMode`;
 
   try {
     const response = await fetch(endpoint, {
-      method: 'POST',
+      method: 'DELETE',
       headers: getMiradorHeaders(),
-      body: JSON.stringify({}),
     });
 
     if (response.ok) {
@@ -225,7 +254,7 @@ export async function unlockDevice(deviceId: string): Promise<MiradoreResponse> 
     return {
       success: false,
       statusCode: response.status,
-      message: `Miradore unlock failed: ${response.statusText}. ${errorText}`,
+      message: `Miradore Lost Mode disable failed: ${response.statusText}. ${errorText}`,
     };
   } catch (err) {
     return {

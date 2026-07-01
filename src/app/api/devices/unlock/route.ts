@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 5. Fire Miradore unlock command ───────────────────────────────────────
-    const mirResult = await unlockDevice(customer.miradore_device_id);
+    const mirResult = await unlockDevice(customer.miradore_device_id, customer.os_platform);
 
     if (!mirResult.success) {
       await supabase.from('audit_logs').insert({
