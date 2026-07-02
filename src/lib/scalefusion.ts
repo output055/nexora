@@ -247,3 +247,82 @@ export async function unlockDevice(deviceId: string, platform?: OsPlatform): Pro
     };
   }
 }
+
+export interface ScalefusionDeviceDetails {
+  id: number;
+  model: string;
+  make: string;
+  serial_no: string;
+  os_type: string;
+  os_version: string;
+  charging: boolean;
+  locked: boolean;
+  last_connected_at: string;
+  [key: string]: any;
+}
+
+export async function getDeviceDetails(deviceId: string): Promise<ScalefusionDeviceDetails> {
+  if (!API_KEY) throw new Error('Scalefusion credentials not configured.');
+  
+  const endpoint = `${getScalefusionBase()}/devices/${deviceId}.json`;
+  
+  const response = await fetch(endpoint, {
+    method: 'GET',
+    headers: getScalefusionHeaders(),
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => 'Unknown error');
+    throw new Error(`Failed to fetch device details: ${response.statusText}. ${errorText}`);
+  }
+
+  return response.json();
+}
+
+export async function executeDeviceAction(
+  deviceId: string,
+  actionType: string,
+  options: Record<string, string | boolean> = {}
+): Promise<MdmResponse> {
+  if (!API_KEY) {
+    return { success: false, statusCode: 500, message: 'Scalefusion credentials not configured.' };
+  }
+
+  const endpoint = `${getScalefusionBase()}/devices/actions.json?device_ids=${deviceId}`;
+  
+  // API requires form data
+  const bodyParams = new URLSearchParams();
+  bodyParams.append('action_type', actionType);
+  for (const [key, value] of Object.entries(options)) {
+    bodyParams.append(key, String(value));
+  }
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${API_KEY}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: bodyParams.toString(),
+    });
+
+    if (response.ok) {
+      return { success: true, statusCode: response.status };
+    }
+
+    const errorText = await response.text().catch(() => 'Unknown error');
+    return {
+      success: false,
+      statusCode: response.status,
+      message: `Scalefusion action failed: ${response.statusText}. ${errorText}`,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      statusCode: 503,
+      message: err instanceof Error ? err.message : 'Network error contacting Scalefusion.',
+    };
+  }
+}

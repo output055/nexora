@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import type { Customer } from '@/types';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { PaginationBar } from './PaginationBar';
+import { DeviceActionModal } from './DeviceActionModal';
 
 interface DeviceTableProps {
   customers: Customer[];
@@ -24,8 +25,10 @@ export function DeviceTable({ customers, onCustomerUpdate }: DeviceTableProps) {
   const [filterLock, setFilterLock] = useState<LockFilter>('all');
   const [sortKey, setSortKey] = useState<SortKey>('device_model');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
-  const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [loadingAction, setLoadingAction] = useState<'lock' | 'unlock' | null>(null);
+  
+  // Modal state
+  const [manageDeviceId, setManageDeviceId] = useState<string | null>(null);
+  const [manageDeviceName, setManageDeviceName] = useState<string>('');
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
@@ -67,30 +70,12 @@ export function DeviceTable({ customers, onCustomerUpdate }: DeviceTableProps) {
     setFilterLock('all');
   };
 
-  const fireAction = async (customerId: string, action: 'lock' | 'unlock') => {
-    setLoadingId(customerId);
-    setLoadingAction(action);
-    try {
-      const res = await fetch(`/api/devices/${action}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success(data.data?.message ?? `Device ${action}ed successfully.`);
-        onCustomerUpdate?.(customerId, {
-          payment_status: action === 'lock' ? 'overdue' : 'current',
-        });
-      } else {
-        toast.error(data.error ?? `${action} failed.`);
-      }
-    } catch {
-      toast.error('Network error — please try again.');
-    } finally {
-      setLoadingId(null);
-      setLoadingAction(null);
-    }
+  const openManageModal = (customerId: string, deviceName: string, model: string) => {
+    // Note: We use miradore_device_id which stores the Scalefusion ID
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) return;
+    setManageDeviceId(customer.miradore_device_id);
+    setManageDeviceName(`${deviceName} (${model})`);
   };
 
   const SortIcon = ({ field }: { field: SortKey }) => {
@@ -216,9 +201,6 @@ export function DeviceTable({ customers, onCustomerUpdate }: DeviceTableProps) {
           <tbody>
             <AnimatePresence>
               {pagination.paginated.map((c, i) => {
-                const nextAction = c.payment_status === 'overdue' ? 'unlock' : 'lock';
-                const isLockAction = nextAction === 'lock';
-
                 return (
                   <motion.tr
                     key={c.id}
@@ -259,22 +241,11 @@ export function DeviceTable({ customers, onCustomerUpdate }: DeviceTableProps) {
                     </td>
                     <td className="px-4 py-3.5">
                       <button
-                        disabled={loadingId === c.id}
-                        onClick={() => fireAction(c.id, nextAction)}
-                        className={`inline-flex min-w-[92px] items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all disabled:opacity-50 ${
-                          isLockAction
-                            ? 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20'
-                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
-                        }`}
+                        onClick={() => openManageModal(c.id, c.full_name, c.device_model)}
+                        className="inline-flex min-w-[92px] items-center justify-center gap-1.5 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-400 transition-all hover:bg-blue-500/20"
                       >
-                        {loadingId === c.id && loadingAction === nextAction ? (
-                          <Loader2 size={12} className="animate-spin" />
-                        ) : isLockAction ? (
-                          <Lock size={12} />
-                        ) : (
-                          <Unlock size={12} />
-                        )}
-                        {isLockAction ? 'Force Lock' : 'Force Unlock'}
+                        <Smartphone size={12} />
+                        Manage
                       </button>
                     </td>
                   </motion.tr>
@@ -308,6 +279,14 @@ export function DeviceTable({ customers, onCustomerUpdate }: DeviceTableProps) {
         onPageChange={pagination.setPage}
         onPageSizeChange={pagination.setPageSize}
         itemLabel="devices"
+      />
+
+      {/* Modal */}
+      <DeviceActionModal
+        isOpen={!!manageDeviceId}
+        onClose={() => setManageDeviceId(null)}
+        deviceId={manageDeviceId || ''}
+        deviceName={manageDeviceName}
       />
     </div>
   );
