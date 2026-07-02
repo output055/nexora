@@ -36,19 +36,49 @@ function getStringField(record: ScalefusionDeviceRecord, keys: string[]): string
   return '';
 }
 
+export interface ScalefusionDeviceProfile {
+  id: number;
+  name: string;
+  type: string;
+}
+
+/**
+ * Fetch all device profiles from Scalefusion.
+ * Uses GET /api/v1/device_profiles.json
+ */
+export async function fetchDeviceProfiles(): Promise<ScalefusionDeviceProfile[]> {
+  if (!API_KEY) {
+    throw new Error('Scalefusion credentials not configured.');
+  }
+
+  const endpoint = `${getScalefusionBase()}/device_profiles.json`;
+  const response = await fetch(endpoint, {
+    method: 'GET',
+    headers: getScalefusionHeaders(),
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => 'Unknown error');
+    throw new Error(`Scalefusion profiles fetch failed: ${response.statusText}. ${errorText}`);
+  }
+
+  return await response.json() as ScalefusionDeviceProfile[];
+}
+
 /**
  * Fetch all devices of a given platform that exist in Scalefusion.
  * 
- * Uses GET /api/v1/devices.json
+ * Uses GET /api/v2/devices.json
  */
 export async function fetchDevicesByPlatform(
-  platform: 'android' | 'ios'
+  platform: 'android' | 'ios',
+  profileId?: string | null
 ): Promise<ScalefusionDevice[]> {
   if (!API_KEY) {
     throw new Error('Scalefusion credentials not configured.');
   }
 
-  const profileId = process.env.DEVICE_PROFILE_ID;
   const baseUrl = 'https://api.scalefusion.com/api/v2';
   const endpoint = profileId 
     ? `${baseUrl}/devices.json?device_profile_id=${profileId}`

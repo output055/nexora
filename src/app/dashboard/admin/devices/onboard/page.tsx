@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   AlertCircle,
@@ -31,6 +31,12 @@ type DiscoveredDevice = {
   id: string;
   serial: string;
   model: string;
+};
+
+type DeviceProfile = {
+  id: number;
+  name: string;
+  type: string;
 };
 
 type RegisterForm = {
@@ -128,6 +134,28 @@ export default function DeviceOnboardingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [lastCustomer, setLastCustomer] = useState<Customer | null>(null);
 
+  const [profiles, setProfiles] = useState<DeviceProfile[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState('');
+  const [fetchingProfiles, setFetchingProfiles] = useState(false);
+
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      setFetchingProfiles(true);
+      try {
+        const res = await fetch('/api/devices/profiles');
+        const json = await res.json();
+        if (json.success && json.data) {
+          setProfiles(json.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch profiles', err);
+      } finally {
+        setFetchingProfiles(false);
+      }
+    };
+    fetchProfiles();
+  }, []);
+
   // QR enrollment confirmation gate (Android only)
   const [qrConfirmed, setQrConfirmed] = useState(false);
 
@@ -191,7 +219,10 @@ export default function DeviceOnboardingPage() {
     setFetchingDevices(true);
     const platform = workflow === 'Android' ? 'android' : 'ios';
     try {
-      const response = await fetch(`/api/devices/discover?platform=${platform}`, { method: 'GET' });
+      const url = selectedProfileId 
+        ? `/api/devices/discover?platform=${platform}&profile_id=${selectedProfileId}`
+        : `/api/devices/discover?platform=${platform}`;
+      const response = await fetch(url, { method: 'GET' });
       const result = await response.json() as DiscoverResponse;
 
       if (!response.ok || !result.success) throw new Error(result.error ?? 'Unable to fetch devices.');
@@ -358,6 +389,10 @@ export default function DeviceOnboardingPage() {
                 selectedDevice={selectedDevice}
                 devices={activeDevices}
                 fetchingDevices={fetchingDevices}
+                profiles={profiles}
+                fetchingProfiles={fetchingProfiles}
+                selectedProfileId={selectedProfileId}
+                onProfileSelect={setSelectedProfileId}
                 onFetchDevices={fetchDevices}
                 onSelectDevice={handleDeviceSelect}
                 onChange={(field, value) => updateForm(workflow, field, value)}
@@ -591,6 +626,10 @@ function DeviceStep({
   selectedDevice,
   devices,
   fetchingDevices,
+  profiles,
+  fetchingProfiles,
+  selectedProfileId,
+  onProfileSelect,
   onFetchDevices,
   onSelectDevice,
   onChange,
@@ -601,6 +640,10 @@ function DeviceStep({
   selectedDevice: DiscoveredDevice | null;
   devices: DiscoveredDevice[];
   fetchingDevices: boolean;
+  profiles: DeviceProfile[];
+  fetchingProfiles: boolean;
+  selectedProfileId: string;
+  onProfileSelect: (id: string) => void;
   onFetchDevices: () => void;
   onSelectDevice: (id: string) => void;
   onChange: (field: keyof RegisterForm, value: string | File | null) => void;
@@ -626,6 +669,23 @@ function DeviceStep({
             Fetch Devices
           </button>
         </div>
+
+        <select
+          id={`${workflow.toLowerCase()}-profile`}
+          value={selectedProfileId}
+          onChange={(event) => onProfileSelect(event.target.value)}
+          disabled={fetchingProfiles || fetchingDevices}
+          className="w-full rounded-xl border border-white/10 bg-[#0D1526] px-3 py-3 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 mb-3"
+        >
+          <option value="">All Profiles (or Global Default)</option>
+          {profiles
+            .filter((p) => workflow === 'Android' ? p.type.toLowerCase().includes('android') : p.type.toLowerCase().includes('apple') || p.type.toLowerCase().includes('ios'))
+            .map((profile) => (
+            <option key={profile.id} value={String(profile.id)}>
+              {profile.name} ({profile.type})
+            </option>
+          ))}
+        </select>
 
         <select
           id={`${workflow.toLowerCase()}-device`}
