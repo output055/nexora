@@ -27,7 +27,7 @@ type StepId = 'qr' | 'device' | 'identity' | 'contact' | 'location' | 'work';
 
 type StepDef = { id: StepId; label: string; icon: React.ReactNode };
 
-type UnassignedDevice = {
+type DiscoveredDevice = {
   id: string;
   serial: string;
   model: string;
@@ -65,10 +65,10 @@ type RegisterResponse = {
   };
 };
 
-type UnassignedResponse = {
+type DiscoverResponse = {
   success: boolean;
   error?: string;
-  data?: UnassignedDevice[];
+  data?: DiscoveredDevice[];
 };
 
 const emptyForm: RegisterForm = {
@@ -121,8 +121,8 @@ export default function DeviceOnboardingPage() {
   const [iosForm, setIosForm] = useState<RegisterForm>(emptyForm);
 
   // Devices fetched from Miradore (filtered by platform, cross-checked against Nexora DB)
-  const [androidDevices, setAndroidDevices] = useState<UnassignedDevice[]>([]);
-  const [iosDevices, setIosDevices] = useState<UnassignedDevice[]>([]);
+  const [androidDevices, setAndroidDevices] = useState<DiscoveredDevice[]>([]);
+  const [iosDevices, setIosDevices] = useState<DiscoveredDevice[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [fetchingDevices, setFetchingDevices] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -152,7 +152,7 @@ export default function DeviceOnboardingPage() {
     }
 
     if (step === 'device') {
-      if (!selectedDeviceId) return `Select an unassigned ${workflow} device from the list.`;
+      if (!selectedDeviceId) return `Select a discovered ${workflow} device from the list.`;
       if (!activeForm.total_owed) return 'Enter the total financed amount.';
       if (!Number.isFinite(Number(activeForm.total_owed)) || Number(activeForm.total_owed) <= 0) return 'Total financed amount must be a positive number.';
     }
@@ -187,14 +187,14 @@ export default function DeviceOnboardingPage() {
     setStepIndex((prev) => Math.min(prev + 1, activeSteps.length - 1));
   };
 
-  const fetchUnassignedDevices = async () => {
+  const fetchDevices = async () => {
     setFetchingDevices(true);
     const platform = workflow === 'Android' ? 'android' : 'ios';
     try {
-      const response = await fetch(`/api/devices/unassigned?platform=${platform}`, { method: 'GET' });
-      const result = await response.json() as UnassignedResponse;
+      const response = await fetch(`/api/devices/discover?platform=${platform}`, { method: 'GET' });
+      const result = await response.json() as DiscoverResponse;
 
-      if (!response.ok || !result.success) throw new Error(result.error ?? 'Unable to fetch unassigned devices.');
+      if (!response.ok || !result.success) throw new Error(result.error ?? 'Unable to fetch devices.');
 
       const devices = result.data ?? [];
       if (workflow === 'Android') {
@@ -203,9 +203,9 @@ export default function DeviceOnboardingPage() {
         setIosDevices(devices);
       }
       setSelectedDeviceId('');
-      toast.success(`${devices.length} unassigned ${workflow} device${devices.length === 1 ? '' : 's'} found.`);
+      toast.success(`${devices.length} discovered ${workflow} device${devices.length === 1 ? '' : 's'} found.`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Unable to fetch unassigned devices.');
+      toast.error(error instanceof Error ? error.message : 'Unable to fetch devices.');
     } finally {
       setFetchingDevices(false);
     }
@@ -266,7 +266,7 @@ export default function DeviceOnboardingPage() {
         setIosDevices((prev) => prev.filter((device) => device.id !== selectedDeviceId));
 
         if (data.miradoreSync.attempted && !data.miradoreSync.success) {
-          toast.warning(`Registered, but Miradore asset sync failed: ${data.miradoreSync.error ?? 'Unknown error'}`);
+          toast.warning(`Registered, but Scalefusion asset sync failed: ${data.miradoreSync.error ?? 'Unknown error'}`);
           return;
         }
       }
@@ -358,7 +358,7 @@ export default function DeviceOnboardingPage() {
                 selectedDevice={selectedDevice}
                 devices={activeDevices}
                 fetchingDevices={fetchingDevices}
-                onFetchDevices={fetchUnassignedDevices}
+                onFetchDevices={fetchDevices}
                 onSelectDevice={handleDeviceSelect}
                 onChange={(field, value) => updateForm(workflow, field, value)}
               />
@@ -598,8 +598,8 @@ function DeviceStep({
   workflow: Workflow;
   form: RegisterForm;
   selectedDeviceId: string;
-  selectedDevice: UnassignedDevice | null;
-  devices: UnassignedDevice[];
+  selectedDevice: DiscoveredDevice | null;
+  devices: DiscoveredDevice[];
   fetchingDevices: boolean;
   onFetchDevices: () => void;
   onSelectDevice: (id: string) => void;
@@ -646,7 +646,7 @@ function DeviceStep({
           <div className="rounded-xl border border-white/8 bg-white/5 p-3">
             <p className="text-sm font-semibold text-white">{selectedDevice.model}</p>
             <p className="mt-1 text-xs text-slate-500">Serial: {selectedDevice.serial}</p>
-            <p className="mt-1 text-xs text-slate-500">Miradore ID: {selectedDevice.id}</p>
+            <p className="mt-1 text-xs text-slate-500">Scalefusion ID: {selectedDevice.id}</p>
           </div>
         ) : (
           <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
@@ -658,7 +658,7 @@ function DeviceStep({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Input id={`${workflow}-model`} label="Device Model" value={form.device_model} onChange={(value) => onChange('device_model', value)} disabled={Boolean(selectedDevice)} required />
-        <Input id={`${workflow}-device-id`} label="Miradore Device ID" value={form.miradore_device_id} onChange={(value) => onChange('miradore_device_id', value)} disabled={Boolean(selectedDevice)} required />
+        <Input id={`${workflow}-device-id`} label="Scalefusion Device ID" value={form.miradore_device_id} onChange={(value) => onChange('miradore_device_id', value)} disabled={Boolean(selectedDevice)} required />
         <Input id={`${workflow}-total`} label="Total Financed Amount" type="number" min="1" step="1" value={form.total_owed} onChange={(value) => onChange('total_owed', value)} required />
       </div>
     </div>

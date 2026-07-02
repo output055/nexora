@@ -9,6 +9,7 @@ import type { Customer } from '@/types';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 
 export default function AdminDevicesPage() {
+  console.log('AdminDevicesPage rendering');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
 

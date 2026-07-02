@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { lockDevice } from '@/lib/miradore';
-import type { MiradoreDeviceLockPayload } from '@/types';
+import { lockDevice } from '@/lib/scalefusion';
+import type { MdmDeviceLockPayload } from '@/types';
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     const contactPhone = process.env.LOCK_CONTACT_PHONE ?? '+1-800-000-0000';
     const footnote = process.env.LOCK_FOOTNOTE_TEXT ?? 'Please pay your outstanding balance to unlock this device.';
 
-    const lockPayload: MiradoreDeviceLockPayload = {
+    const lockPayload: MdmDeviceLockPayload = {
       NotificationText: `This device has been locked due to an overdue balance. Please call ${contactPhone} to make a payment.`,
       PhoneNumber: contactPhone,
       FootnoteText: footnote,

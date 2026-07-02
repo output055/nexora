@@ -111,7 +111,7 @@ export function DeviceTable({ customers, onCustomerUpdate }: DeviceTableProps) {
             <input
               id="device-search"
               type="text"
-              placeholder="Search by owner, device model, Miradore ID, or phone…"
+              placeholder="Search by owner, device model, Scalefusion ID, or phone…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/8 text-white placeholder:text-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"

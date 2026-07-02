@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { updateDeviceAssetOwner } from '@/lib/miradore';
+import { updateDeviceAssetOwner } from '@/lib/scalefusion';
 import type { Customer, OsPlatform, PaymentCycle, ResidentialStatus } from '@/types';
 
 type RegisterDevicePayload = {

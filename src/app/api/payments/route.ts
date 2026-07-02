@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { unlockDevice } from '@/lib/miradore';
+import { unlockDevice } from '@/lib/scalefusion';
 import type { Customer, PaymentStatus } from '@/types';
 
 type PaymentRequestBody = {

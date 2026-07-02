@@ -83,13 +83,13 @@ export interface AuditLog {
 }
 
 // ─── API Models ───────────────────────────────────────────────────────────────
-export interface MiradoreDeviceLockPayload {
+export interface MdmDeviceLockPayload {
   NotificationText: string;
   PhoneNumber: string;
   FootnoteText: string;
 }
 
-export interface MiradoreResponse {
+export interface MdmResponse {
   success: boolean;
   statusCode: number;
   message?: string;
