@@ -35,12 +35,12 @@ export default function AdminDashboard() {
       const supabase = createBrowserSupabaseClient();
       const { data, error } = await supabase
         .from('customers')
-        .select('*')
+        .select('*, devices(*)')
         .order('created_at', { ascending: false });
 
       if (data && !error) {
         setCustomers(data);
-        const totalCapital = data.reduce((sum, c) => sum + Number(c.total_owed), 0);
+        const totalCapital = data.reduce((sum, c) => sum + (c.devices?.[0]?.total_owed ? Number(c.devices[0].total_owed) : 0), 0);
         setStats(prev => ({ ...prev, totalCapitalDeployed: totalCapital }));
       }
       setLoading(false);
@@ -52,7 +52,7 @@ export default function AdminDashboard() {
     setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
   };
 
-  const liveOverdue = customers.filter((c) => c.payment_status === 'overdue').length;
+  const liveOverdue = customers.filter((c) => c.devices?.[0]?.payment_status === 'overdue').length;
   const liveActive = customers.length;
 
   return (

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { fetchDeviceProfiles } from '@/lib/scalefusion';
+import { fetchDeviceProfiles } from '@/lib/hexnode';
 
 export async function GET() {
   try {
@@ -23,7 +23,12 @@ export async function GET() {
       );
     }
 
-    const profiles = await fetchDeviceProfiles();
+    let profiles = [];
+    try {
+      profiles = await fetchDeviceProfiles();
+    } catch (e) {
+      console.warn('Hexnode fetchDeviceProfiles failed, returning empty profiles:', e);
+    }
 
     return NextResponse.json({
       success: true,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { fetchDevicesByPlatform } from '@/lib/scalefusion';
+import { fetchDevicesByPlatform } from '@/lib/hexnode';
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,16 +28,16 @@ export async function GET(request: NextRequest) {
     const devices = await fetchDevicesByPlatform(platform, profileId);
 
     // Cross-check against the Nexora DB to filter out devices already assigned to a customer
-    const { data: assignedCustomers, error: dbError } = await supabase
-      .from('customers')
-      .select('miradore_device_id')
-      .not('miradore_device_id', 'is', null);
+    const { data: assignedDevices, error: dbError } = await supabase
+      .from('devices')
+      .select('hexnode_device_id')
+      .not('hexnode_device_id', 'is', null);
 
     if (dbError) {
       throw new Error(`Database error checking assigned devices: ${dbError.message}`);
     }
 
-    const assignedIds = new Set(assignedCustomers.map(c => String(c.miradore_device_id)));
+    const assignedIds = new Set(assignedDevices.map(d => String(d.hexnode_device_id)));
     const unassignedDevices = devices.filter(d => !assignedIds.has(String(d.id)));
 
     return NextResponse.json({

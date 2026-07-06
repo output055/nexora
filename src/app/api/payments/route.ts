@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { unlockDevice } from '@/lib/scalefusion';
+import { unlockDevice } from '@/lib/hexnode';
 import type { Customer, PaymentStatus } from '@/types';
 
 type PaymentRequestBody = {
@@ -54,26 +54,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: customer, error: customerError } = await supabase
-      .from('customers')
-      .select('*')
-      .eq('id', parsed.customerId)
+    const { data: device, error: deviceError } = await supabase
+      .from('devices')
+      .select('*, customers(id, full_name)')
+      .eq('customer_id', parsed.customerId)
+      .limit(1)
       .single();
 
-    if (customerError || !customer) {
+    if (deviceError || !device) {
       return NextResponse.json(
-        { success: false, error: 'Customer not found.' },
+        { success: false, error: 'Customer or device not found.' },
         { status: 404 }
       );
     }
 
-    const currentCustomer = customer as Customer;
-    const currentBalance = Number(currentCustomer.remaining_balance);
+    const currentDevice = device;
+    const currentCustomer = Array.isArray(device.customers) ? device.customers[0] : device.customers;
+    const currentBalance = Number(currentDevice.remaining_balance);
     const newBalance = Math.max(0, currentBalance - parsed.amount);
-    const paymentStatus: PaymentStatus = newBalance === 0 ? 'current' : currentCustomer.payment_status;
+    const paymentStatus: PaymentStatus = newBalance === 0 ? 'current' : currentDevice.payment_status;
 
     const { error: paymentError } = await supabase.from('payments').insert({
-      customer_id: currentCustomer.id,
+      customer_id: parsed.customerId,
+      device_id: currentDevice.id,
       amount_paid: parsed.amount,
       collector_id: user.id,
     });
@@ -85,32 +88,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: updatedCustomer, error: updateError } = await supabase
-      .from('customers')
+    const { data: updatedDevice, error: updateError } = await supabase
+      .from('devices')
       .update({
         remaining_balance: newBalance,
         payment_status: paymentStatus,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', currentCustomer.id)
+      .eq('id', currentDevice.id)
       .select('*')
       .single();
 
-    if (updateError || !updatedCustomer) {
+    if (updateError || !updatedDevice) {
       await supabase.from('audit_logs').insert({
         actor_name: user.email ?? 'Unknown',
-        action_description: `PAYMENT POSTED but balance update failed for ${currentCustomer.full_name} - ${updateError?.message ?? 'unknown error'}`,
+        action_description: `PAYMENT POSTED but balance update failed for ${currentCustomer?.full_name} - ${updateError?.message ?? 'unknown error'}`,
       });
 
       return NextResponse.json(
-        { success: false, error: updateError?.message ?? 'Payment posted but customer balance update failed.' },
+        { success: false, error: updateError?.message ?? 'Payment posted but device balance update failed.' },
         { status: 500 }
       );
     }
 
     await supabase.from('audit_logs').insert({
       actor_name: user.email ?? 'Unknown',
-      action_description: `Logged payment of GHS ${parsed.amount.toLocaleString()} for ${currentCustomer.full_name} - balance ${newBalance === 0 ? 'cleared' : `now GHS ${newBalance.toLocaleString()}`}`,
+      action_description: `Logged payment of GHS ${parsed.amount.toLocaleString()} for ${currentCustomer?.full_name} - balance ${newBalance === 0 ? 'cleared' : `now GHS ${newBalance.toLocaleString()}`}`,
     });
 
     let unlockResult: { attempted: boolean; success: boolean; error?: string } = {
@@ -119,7 +122,7 @@ export async function POST(request: NextRequest) {
     };
 
     if (newBalance === 0) {
-      const mirResult = await unlockDevice(currentCustomer.miradore_device_id);
+      const mirResult = await unlockDevice(currentDevice.hexnode_device_id, currentDevice.os_platform);
       unlockResult = {
         attempted: true,
         success: mirResult.success,
@@ -129,15 +132,16 @@ export async function POST(request: NextRequest) {
       await supabase.from('audit_logs').insert({
         actor_name: 'System (auto)',
         action_description: mirResult.success
-          ? `AUTO UNLOCK triggered for device ${currentCustomer.miradore_device_id} (${currentCustomer.full_name}) - balance cleared`
-          : `AUTO UNLOCK FAILED for ${currentCustomer.full_name} (${currentCustomer.os_platform}) - ${mirResult.message ?? 'MDM unlock command failed'}`,
+          ? `AUTO UNLOCK triggered for device ${currentDevice.hexnode_device_id} (${currentCustomer?.full_name}) - balance cleared`
+          : `AUTO UNLOCK FAILED for ${currentCustomer?.full_name} (${currentDevice.os_platform}) - ${mirResult.message ?? 'MDM unlock command failed'}`,
       });
     }
 
     return NextResponse.json({
       success: true,
       data: {
-        customer: updatedCustomer as Customer,
+        device: updatedDevice,
+        customer: currentCustomer,
         payment: {
           amount: parsed.amount,
           wasCleared: newBalance === 0,

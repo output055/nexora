@@ -122,46 +122,7 @@ export async function fetchAppleDevices(): Promise<ScalefusionDevice[]> {
   return fetchDevicesByPlatform('ios');
 }
 
-/**
- * Update the device's name in Scalefusion after a customer registration.
- * Uses PATCH /api/v1/devices/{id}.json
- */
-export async function updateDeviceAssetOwner(deviceId: string, customerName: string): Promise<MdmResponse> {
-  if (!API_KEY) {
-    return { success: false, statusCode: 500, message: 'Scalefusion credentials not configured.' };
-  }
 
-  const endpoint = `${getScalefusionBase()}/devices/${encodeURIComponent(deviceId)}.json`;
-
-  try {
-    const response = await fetch(endpoint, {
-      method: 'PATCH',
-      headers: getScalefusionHeaders(),
-      body: JSON.stringify({
-        device: {
-          name: `Nexora: ${customerName}`,
-        }
-      }),
-    });
-
-    if (response.ok) {
-      return { success: true, statusCode: response.status };
-    }
-
-    const errorText = await response.text().catch(() => 'Unknown error');
-    return {
-      success: false,
-      statusCode: response.status,
-      message: `Scalefusion asset update failed: ${response.statusText}. ${errorText}`,
-    };
-  } catch (err) {
-    return {
-      success: false,
-      statusCode: 503,
-      message: err instanceof Error ? err.message : 'Network error contacting Scalefusion.',
-    };
-  }
-}
 
 /**
  * Locks a device via Scalefusion MDM.

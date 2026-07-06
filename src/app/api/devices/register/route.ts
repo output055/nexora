@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { updateDeviceAssetOwner } from '@/lib/scalefusion';
-import type { Customer, OsPlatform, PaymentCycle, ResidentialStatus } from '@/types';
+import { getDeviceDetails } from '@/lib/hexnode';
+import type { Customer, Device, OsPlatform, PaymentCycle, ResidentialStatus } from '@/types';
 
 type RegisterDevicePayload = {
   full_name: string;
@@ -19,7 +19,10 @@ type RegisterDevicePayload = {
   payment_cycle: PaymentCycle;
   os_platform: OsPlatform;
   device_model: string;
-  miradore_device_id: string;
+  hexnode_device_id: string;
+  imei?: string;
+  serial_number?: string;
+  os_version?: string;
   total_owed: number;
   ghana_card_scan: File;
 };
@@ -51,13 +54,16 @@ function parseRegisterPayload(formData: FormData):
     payment_cycle: cleanString(formData, 'payment_cycle'),
     os_platform: cleanString(formData, 'os_platform'),
     device_model: cleanString(formData, 'device_model'),
-    miradore_device_id: cleanString(formData, 'miradore_device_id'),
+    hexnode_device_id: cleanString(formData, 'hexnode_device_id'),
+    imei: cleanString(formData, 'imei'),
+    serial_number: cleanString(formData, 'serial_number'),
+    os_version: cleanString(formData, 'os_version'),
     total_owed: Number(cleanString(formData, 'total_owed')),
     ghana_card_scan: formData.get('ghana_card_scan'),
   };
 
   if (!payload.device_model) return { error: 'Device model is required.' };
-  if (!payload.miradore_device_id) return { error: 'Miradore device id, serial, or IMEI is required.' };
+  if (!payload.hexnode_device_id) return { error: 'Miradore device id, serial, or IMEI is required.' };
   if (!['iOS', 'Android'].includes(payload.os_platform)) return { error: 'os_platform must be iOS or Android.' };
   if (!Number.isFinite(payload.total_owed) || payload.total_owed <= 0) return { error: 'Total financed amount must be a positive number.' };
 
@@ -123,9 +129,9 @@ export async function POST(request: NextRequest) {
     const { payload } = parsed;
 
     const { data: existingDevice } = await admin
-      .from('customers')
+      .from('devices')
       .select('id')
-      .eq('miradore_device_id', payload.miradore_device_id)
+      .eq('hexnode_device_id', payload.hexnode_device_id)
       .maybeSingle();
 
     if (existingDevice) {
@@ -142,7 +148,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'This Ghana Card ID is already registered.' }, { status: 409 });
     }
 
-    const scanPath = `${payload.ghana_card_id}/${Date.now()}-${payload.miradore_device_id}.${getScanExtension(payload.ghana_card_scan)}`;
+    const scanPath = `${payload.ghana_card_id}/${Date.now()}-${payload.hexnode_device_id}.${getScanExtension(payload.ghana_card_scan)}`;
     const { error: uploadError } = await admin.storage
       .from('ghana-card-scans')
       .upload(scanPath, payload.ghana_card_scan, {
@@ -153,6 +159,17 @@ export async function POST(request: NextRequest) {
     if (uploadError) {
       return NextResponse.json({ success: false, error: uploadError.message }, { status: 500 });
     }
+
+    let hexnodeData: any = {};
+    try {
+      hexnodeData = await getDeviceDetails(payload.hexnode_device_id);
+    } catch (e) {
+      console.warn('Failed to fetch detailed Hexnode data, continuing with limited info.', e);
+    }
+
+    const imei = payload.imei || hexnodeData?.network?.imei_1 || hexnodeData?.network?.imei || hexnodeData?.device?.imei_1 || hexnodeData?.device?.imei || null;
+    const serial_number = payload.serial_number || hexnodeData?.device?.serial_number || hexnodeData?.serial_no || null;
+    const os_version = payload.os_version || hexnodeData?.device?.os_version || hexnodeData?.os_version || null;
 
     const { data: customer, error: customerError } = await admin
       .from('customers')
@@ -170,12 +187,6 @@ export async function POST(request: NextRequest) {
         occupation: payload.occupation,
         place_of_work: payload.place_of_work,
         payment_cycle: payload.payment_cycle,
-        os_platform: payload.os_platform,
-        device_model: payload.device_model,
-        miradore_device_id: payload.miradore_device_id,
-        total_owed: payload.total_owed,
-        remaining_balance: payload.total_owed,
-        payment_status: 'current',
       })
       .select('*')
       .single();
@@ -188,40 +199,49 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { data: device, error: deviceError } = await admin
+      .from('devices')
+      .insert({
+        customer_id: customer.id,
+        os_platform: payload.os_platform,
+        device_model: payload.device_model,
+        hexnode_device_id: payload.hexnode_device_id,
+        imei,
+        serial_number,
+        os_version,
+        total_owed: payload.total_owed,
+        remaining_balance: payload.total_owed,
+        payment_status: 'current',
+      })
+      .select('*')
+      .single();
+
+    if (deviceError || !device) {
+      await admin.from('customers').delete().eq('id', customer.id);
+      await admin.storage.from('ghana-card-scans').remove([scanPath]);
+      return NextResponse.json(
+        { success: false, error: deviceError?.message ?? 'Unable to link device.' },
+        { status: 500 }
+      );
+    }
+
     const { error: auditError } = await admin.from('audit_logs').insert({
       actor_name: user.email ?? 'Unknown',
-      action_description: `Admin registered new ${payload.os_platform} device ${payload.miradore_device_id} to customer ${payload.full_name} (${payload.ghana_card_id})`,
+      action_description: `Admin registered new ${payload.os_platform} device ${payload.hexnode_device_id} to customer ${payload.full_name} (${payload.ghana_card_id})`,
     });
 
     if (auditError) {
+      await admin.from('devices').delete().eq('id', device.id);
       await admin.from('customers').delete().eq('id', customer.id);
       await admin.storage.from('ghana-card-scans').remove([scanPath]);
       return NextResponse.json({ success: false, error: auditError.message }, { status: 500 });
-    }
-
-    let miradoreSync = { attempted: false, success: false, error: undefined as string | undefined };
-
-    if (payload.os_platform === 'iOS') {
-      const result = await updateDeviceAssetOwner(payload.miradore_device_id, payload.full_name);
-      miradoreSync = {
-        attempted: true,
-        success: result.success,
-        error: result.message,
-      };
-
-      if (!result.success) {
-        await admin.from('audit_logs').insert({
-          actor_name: 'System (auto)',
-          action_description: `Miradore asset sync failed for ${payload.miradore_device_id} (${payload.full_name}) - ${result.message ?? 'unknown error'}`,
-        });
-      }
     }
 
     return NextResponse.json({
       success: true,
       data: {
         customer: customer as Customer,
-        miradoreSync,
+        device: device as Device,
       },
     });
   } catch (error) {

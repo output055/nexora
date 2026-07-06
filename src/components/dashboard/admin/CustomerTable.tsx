@@ -35,14 +35,15 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
     [...customers]
       .filter((c) => {
         const q = search.toLowerCase();
+        const firstDevice = c.devices?.[0];
         const matchSearch =
           !q ||
           c.full_name.toLowerCase().includes(q) ||
           c.phone_number.includes(q) ||
-          c.device_model.toLowerCase().includes(q) ||
+          (firstDevice?.device_model ?? '').toLowerCase().includes(q) ||
           (c.ghana_card_id ?? '').toLowerCase().includes(q);
-        const matchStatus = filterStatus === 'all' || c.payment_status === filterStatus;
-        const matchPlatform = filterPlatform === 'all' || c.os_platform === filterPlatform;
+        const matchStatus = filterStatus === 'all' || firstDevice?.payment_status === filterStatus;
+        const matchPlatform = filterPlatform === 'all' || firstDevice?.os_platform === filterPlatform;
         const matchCycle = filterCycle === 'all' || c.payment_cycle === filterCycle;
         return matchSearch && matchStatus && matchPlatform && matchCycle;
       })
@@ -53,14 +54,16 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
             : b.full_name.localeCompare(a.full_name);
         }
         if (sortKey === 'remaining_balance') {
-          return sortDir === 'asc'
-            ? a.remaining_balance - b.remaining_balance
-            : b.remaining_balance - a.remaining_balance;
+          const aBal = a.devices?.[0]?.remaining_balance ?? 0;
+          const bBal = b.devices?.[0]?.remaining_balance ?? 0;
+          return sortDir === 'asc' ? aBal - bBal : bBal - aBal;
         }
         if (sortKey === 'payment_status') {
+          const aStat = a.devices?.[0]?.payment_status ?? 'current';
+          const bStat = b.devices?.[0]?.payment_status ?? 'current';
           return sortDir === 'asc'
-            ? a.payment_status.localeCompare(b.payment_status)
-            : b.payment_status.localeCompare(a.payment_status);
+            ? aStat.localeCompare(bStat)
+            : bStat.localeCompare(aStat);
         }
         if (sortKey === 'created_at') {
           const aDate = new Date(a.created_at).getTime();
@@ -247,17 +250,17 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                     </div>
                   </td>
                   <td className="px-4 py-3.5">
-                    <p className="text-sm text-slate-300">{c.device_model}</p>
-                    <p className="text-xs text-slate-600 mt-0.5">ID: {c.miradore_device_id}</p>
+                    <p className="text-sm text-slate-300">{c.devices?.[0]?.device_model ?? '—'}</p>
+                    <p className="text-xs text-slate-600 mt-0.5">ID: {c.devices?.[0]?.hexnode_device_id ?? '—'}</p>
                   </td>
                   <td className="px-4 py-3.5">
                     <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold ${
-                      c.os_platform === 'iOS'
+                      c.devices?.[0]?.os_platform === 'iOS'
                         ? 'bg-slate-700/60 text-slate-300'
                         : 'bg-emerald-500/10 text-emerald-400'
                     }`}>
-                      {c.os_platform === 'iOS' ? <Apple size={12} /> : <Smartphone size={12} />}
-                      {c.os_platform}
+                      {c.devices?.[0]?.os_platform === 'iOS' ? <Apple size={12} /> : <Smartphone size={12} />}
+                      {c.devices?.[0]?.os_platform ?? '—'}
                     </div>
                   </td>
                   <td className="px-4 py-3.5">
@@ -267,22 +270,22 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                   </td>
                   <td className="px-4 py-3.5">
                     <p className={`text-sm font-bold tabular-nums ${
-                      c.remaining_balance > 0 ? 'text-white' : 'text-emerald-400'
+                      (c.devices?.[0]?.remaining_balance ?? 0) > 0 ? 'text-white' : 'text-emerald-400'
                     }`}>
-                      {c.remaining_balance === 0 ? 'Paid ✓' : `GH₵${c.remaining_balance.toLocaleString()}`}
+                      {(c.devices?.[0]?.remaining_balance ?? 0) === 0 ? 'Paid ✓' : `GH₵${c.devices?.[0]?.remaining_balance.toLocaleString()}`}
                     </p>
-                    <p className="text-xs text-slate-600 mt-0.5">of GH₵{c.total_owed.toLocaleString()}</p>
+                    <p className="text-xs text-slate-600 mt-0.5">of GH₵{(c.devices?.[0]?.total_owed ?? 0).toLocaleString()}</p>
                   </td>
                   <td className="px-4 py-3.5">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                      c.payment_status === 'overdue'
+                      c.devices?.[0]?.payment_status === 'overdue'
                         ? 'bg-red-500/15 text-red-400 border border-red-500/20'
                         : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
                     }`}>
                       <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
-                        c.payment_status === 'overdue' ? 'bg-red-400' : 'bg-emerald-400'
+                        c.devices?.[0]?.payment_status === 'overdue' ? 'bg-red-400' : 'bg-emerald-400'
                       }`} />
-                      {c.payment_status === 'overdue' ? 'Overdue' : 'Current'}
+                      {c.devices?.[0]?.payment_status === 'overdue' ? 'Overdue' : 'Current'}
                     </span>
                   </td>
                   <td className="px-4 py-3.5">

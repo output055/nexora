@@ -54,7 +54,10 @@ type RegisterForm = {
   place_of_work: string;
   payment_cycle: PaymentCycle | '';
   device_model: string;
-  miradore_device_id: string;
+  hexnode_device_id: string;
+  imei: string;
+  serial_number: string;
+  os_version: string;
   total_owed: string;
 };
 
@@ -92,7 +95,10 @@ const emptyForm: RegisterForm = {
   place_of_work: '',
   payment_cycle: '',
   device_model: '',
-  miradore_device_id: '',
+  hexnode_device_id: '',
+  imei: '',
+  serial_number: '',
+  os_version: '',
   total_owed: '',
 };
 
@@ -115,7 +121,7 @@ const iosSteps: StepDef[] = [
   { id: 'work', label: 'Work', icon: <BriefcaseBusiness size={15} /> },
 ];
 
-const androidQrImage = process.env.NEXT_PUBLIC_ANDROID_ENTERPRISE_QR_IMAGE_URL ?? '';
+const androidQrImage = process.env.NEXT_PUBLIC_ANDROID_ENTERPRISE_QR_IMAGE_URL || '/adnroid_enroll_qr_code.png';
 const androidQrPayload = process.env.NEXT_PUBLIC_ANDROID_ENTERPRISE_ENROLLMENT_QR ?? '';
 
 const GHANA_CARD_PATTERN = /^GHA-\d{9}-\d$/i;
@@ -155,6 +161,37 @@ export default function DeviceOnboardingPage() {
     };
     fetchProfiles();
   }, []);
+
+  useEffect(() => {
+    const doFetch = async () => {
+      setFetchingDevices(true);
+      const platform = workflow === 'Android' ? 'android' : 'ios';
+      try {
+        const url = selectedProfileId 
+          ? `/api/devices/discover?platform=${platform}&profile_id=${selectedProfileId}`
+          : `/api/devices/discover?platform=${platform}`;
+        const response = await fetch(url, { method: 'GET' });
+        const result = await response.json() as DiscoverResponse;
+
+        if (!response.ok || !result.success) throw new Error(result.error ?? 'Unable to fetch devices.');
+
+        const devices = result.data ?? [];
+        if (workflow === 'Android') {
+          setAndroidDevices(devices);
+        } else {
+          setIosDevices(devices);
+        }
+        setSelectedDeviceId('');
+        // toast.success(`${devices.length} discovered ${workflow} device${devices.length === 1 ? '' : 's'} found.`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Unable to fetch devices.');
+      } finally {
+        setFetchingDevices(false);
+      }
+    };
+    
+    doFetch();
+  }, [workflow, selectedProfileId]);
 
   // QR enrollment confirmation gate (Android only)
   const [qrConfirmed, setQrConfirmed] = useState(false);
@@ -258,7 +295,10 @@ export default function DeviceOnboardingPage() {
     formData.set('payment_cycle', form.payment_cycle);
     formData.set('os_platform', platform);
     formData.set('device_model', form.device_model);
-    formData.set('miradore_device_id', form.miradore_device_id);
+    formData.set('hexnode_device_id', form.hexnode_device_id);
+    formData.set('imei', form.imei);
+    formData.set('serial_number', form.serial_number);
+    formData.set('os_version', form.os_version);
     formData.set('total_owed', form.total_owed);
     if (form.ghana_card_scan) formData.set('ghana_card_scan', form.ghana_card_scan);
 
@@ -297,7 +337,7 @@ export default function DeviceOnboardingPage() {
         setIosDevices((prev) => prev.filter((device) => device.id !== selectedDeviceId));
 
         if (data.miradoreSync.attempted && !data.miradoreSync.success) {
-          toast.warning(`Registered, but Scalefusion asset sync failed: ${data.miradoreSync.error ?? 'Unknown error'}`);
+          toast.warning(`Registered, but Hexnode asset sync failed: ${data.miradoreSync.error ?? 'Unknown error'}`);
           return;
         }
       }
@@ -312,15 +352,32 @@ export default function DeviceOnboardingPage() {
     }
   };
 
-  const handleDeviceSelect = (id: string) => {
+  const handleDeviceSelect = async (id: string) => {
     const device = activeDevices.find((item) => item.id === id);
     setSelectedDeviceId(id);
     const setter = workflow === 'Android' ? setAndroidForm : setIosForm;
     setter((prev) => ({
       ...prev,
       device_model: device?.model ?? '',
-      miradore_device_id: device?.id ?? '',
+      hexnode_device_id: device?.id ?? '',
     }));
+
+    if (id) {
+      try {
+        const res = await fetch(`/api/devices/details?id=${id}`);
+        const result = await res.json();
+        if (result.success && result.data) {
+          setter((prev) => ({
+            ...prev,
+            imei: result.data.imei || '',
+            serial_number: result.data.serial_number || '',
+            os_version: result.data.os_version || '',
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to fetch device details for autofill', err);
+      }
+    }
   };
 
   return (
@@ -558,7 +615,7 @@ function QrEnrollmentStep({
 }) {
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 md:grid-cols-[180px_minmax(0,1fr)]">
+      <div className="grid gap-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 md:grid-cols-[260px_minmax(0,1fr)]">
         <div className="rounded-xl border border-emerald-500/20 bg-white p-3">
           {androidQrImage ? (
             <div
@@ -706,7 +763,7 @@ function DeviceStep({
           <div className="rounded-xl border border-white/8 bg-white/5 p-3">
             <p className="text-sm font-semibold text-white">{selectedDevice.model}</p>
             <p className="mt-1 text-xs text-slate-500">Serial: {selectedDevice.serial}</p>
-            <p className="mt-1 text-xs text-slate-500">Scalefusion ID: {selectedDevice.id}</p>
+            <p className="mt-1 text-xs text-slate-500">Hexnode ID: {selectedDevice.id}</p>
           </div>
         ) : (
           <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
@@ -718,7 +775,10 @@ function DeviceStep({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Input id={`${workflow}-model`} label="Device Model" value={form.device_model} onChange={(value) => onChange('device_model', value)} disabled={Boolean(selectedDevice)} required />
-        <Input id={`${workflow}-device-id`} label="Scalefusion Device ID" value={form.miradore_device_id} onChange={(value) => onChange('miradore_device_id', value)} disabled={Boolean(selectedDevice)} required />
+        <Input id={`${workflow}-device-id`} label="Hexnode Device ID" value={form.hexnode_device_id} onChange={(value) => onChange('hexnode_device_id', value)} disabled={Boolean(selectedDevice)} required />
+        <Input id={`${workflow}-imei`} label="IMEI (Auto-filled)" value={form.imei} onChange={(value) => onChange('imei', value)} />
+        <Input id={`${workflow}-serial`} label="Serial Number (Auto-filled)" value={form.serial_number} onChange={(value) => onChange('serial_number', value)} />
+        <Input id={`${workflow}-os-version`} label="OS Version (Auto-filled)" value={form.os_version} onChange={(value) => onChange('os_version', value)} />
         <Input id={`${workflow}-total`} label="Total Financed Amount" type="number" min="1" step="1" value={form.total_owed} onChange={(value) => onChange('total_owed', value)} required />
       </div>
     </div>

@@ -16,7 +16,7 @@ export default function AdminCustomersPage() {
       const supabase = createBrowserSupabaseClient();
       const { data, error } = await supabase
         .from('customers')
-        .select('*')
+        .select('*, devices(*)')
         .order('created_at', { ascending: false });
 
       if (data && !error) {
@@ -31,7 +31,7 @@ export default function AdminCustomersPage() {
     setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
   };
 
-  const liveOverdue = customers.filter((c) => c.payment_status === 'overdue').length;
+  const liveOverdue = customers.filter((c) => c.devices?.[0]?.payment_status === 'overdue').length;
   const liveActive = customers.length;
 
   return (

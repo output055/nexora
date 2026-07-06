@@ -4,14 +4,14 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Lock, Unlock, Loader2, Apple, Smartphone, ChevronUp, ChevronDown, X } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Customer } from '@/types';
+import type { Device } from '@/types';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { PaginationBar } from './PaginationBar';
 import { DeviceActionModal } from './DeviceActionModal';
 
 interface DeviceTableProps {
-  customers: Customer[];
-  onCustomerUpdate?: (customerId: string, updates: Partial<Customer>) => void;
+  devices: Device[];
+  onDeviceUpdate?: (deviceId: string, updates: Partial<Device>) => void;
 }
 
 type SortKey = 'full_name' | 'device_model' | 'os_platform' | 'payment_status';
@@ -19,7 +19,7 @@ type SortDir = 'asc' | 'desc';
 type PlatformFilter = 'all' | 'iOS' | 'Android';
 type LockFilter = 'all' | 'locked' | 'unlocked';
 
-export function DeviceTable({ customers, onCustomerUpdate }: DeviceTableProps) {
+export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
   const [search, setSearch] = useState('');
   const [filterPlatform, setFilterPlatform] = useState<PlatformFilter>('all');
   const [filterLock, setFilterLock] = useState<LockFilter>('all');
@@ -36,28 +36,33 @@ export function DeviceTable({ customers, onCustomerUpdate }: DeviceTableProps) {
   };
 
   const filtered = useMemo(() =>
-    [...customers]
-      .filter((c) => {
+    [...devices]
+      .filter((d) => {
         const q = search.toLowerCase();
+        const customer = Array.isArray(d.customers) ? d.customers[0] : d.customers;
+        const customerName = customer?.full_name || '';
+        const phone = customer?.phone_number || '';
         const matchSearch =
           !q ||
-          c.full_name.toLowerCase().includes(q) ||
-          c.device_model.toLowerCase().includes(q) ||
-          c.miradore_device_id.toLowerCase().includes(q) ||
-          c.phone_number.includes(q);
-        const matchPlatform = filterPlatform === 'all' || c.os_platform === filterPlatform;
+          customerName.toLowerCase().includes(q) ||
+          d.device_model.toLowerCase().includes(q) ||
+          d.hexnode_device_id.toLowerCase().includes(q) ||
+          phone.includes(q);
+        const matchPlatform = filterPlatform === 'all' || d.os_platform === filterPlatform;
         const matchLock =
           filterLock === 'all' ||
-          (filterLock === 'locked' && c.payment_status === 'overdue') ||
-          (filterLock === 'unlocked' && c.payment_status !== 'overdue');
+          (filterLock === 'locked' && d.payment_status === 'overdue') ||
+          (filterLock === 'unlocked' && d.payment_status !== 'overdue');
         return matchSearch && matchPlatform && matchLock;
       })
       .sort((a, b) => {
-        const aVal = String(a[sortKey] ?? '');
-        const bVal = String(b[sortKey] ?? '');
+        const aCustomer = Array.isArray(a.customers) ? a.customers[0] : a.customers;
+        const bCustomer = Array.isArray(b.customers) ? b.customers[0] : b.customers;
+        const aVal = sortKey === 'full_name' ? String(aCustomer?.full_name ?? '') : String(a[sortKey] ?? '');
+        const bVal = sortKey === 'full_name' ? String(bCustomer?.full_name ?? '') : String(b[sortKey] ?? '');
         return sortDir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
       }),
-    [customers, search, filterPlatform, filterLock, sortKey, sortDir]
+    [devices, search, filterPlatform, filterLock, sortKey, sortDir]
   );
 
   const pagination = usePagination(filtered, 10);
@@ -70,11 +75,10 @@ export function DeviceTable({ customers, onCustomerUpdate }: DeviceTableProps) {
     setFilterLock('all');
   };
 
-  const openManageModal = (customerId: string, deviceName: string, model: string) => {
-    // Note: We use miradore_device_id which stores the Scalefusion ID
-    const customer = customers.find(c => c.id === customerId);
-    if (!customer) return;
-    setManageDeviceId(customer.miradore_device_id);
+  const openManageModal = (deviceId: string, deviceName: string, model: string) => {
+    const device = devices.find(d => d.id === deviceId);
+    if (!device) return;
+    setManageDeviceId(device.hexnode_device_id);
     setManageDeviceName(`${deviceName} (${model})`);
   };
 
@@ -96,7 +100,7 @@ export function DeviceTable({ customers, onCustomerUpdate }: DeviceTableProps) {
             <input
               id="device-search"
               type="text"
-              placeholder="Search by owner, device model, Scalefusion ID, or phone…"
+              placeholder="Search by owner, device model, Hexnode ID, or phone…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/8 text-white placeholder:text-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
@@ -200,48 +204,53 @@ export function DeviceTable({ customers, onCustomerUpdate }: DeviceTableProps) {
           </thead>
           <tbody>
             <AnimatePresence>
-              {pagination.paginated.map((c, i) => {
+              {pagination.paginated.map((d, i) => {
+                const customer = Array.isArray(d.customers) ? d.customers[0] : d.customers;
                 return (
                   <motion.tr
-                    key={c.id}
+                    key={d.id}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ delay: i * 0.02 }}
-                    className="border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors"
+                    onClick={() => openManageModal(d.id, customer?.full_name ?? 'Device', d.device_model)}
+                    className="border-b border-white/5 last:border-0 hover:bg-white/5 cursor-pointer transition-colors"
                   >
                     <td className="px-4 py-3.5">
-                      <p className="text-sm font-semibold text-white">{c.device_model}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">ID: {c.miradore_device_id}</p>
+                      <p className="text-sm font-semibold text-white">{d.device_model}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">ID: {d.hexnode_device_id}</p>
                     </td>
                     <td className="px-4 py-3.5">
                       <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold ${
-                        c.os_platform === 'iOS'
+                        d.os_platform === 'iOS'
                           ? 'bg-slate-700/60 text-slate-300'
                           : 'bg-emerald-500/10 text-emerald-400'
                       }`}>
-                        {c.os_platform === 'iOS' ? <Apple size={12} /> : <Smartphone size={12} />}
-                        {c.os_platform}
+                        {d.os_platform === 'iOS' ? <Apple size={12} /> : <Smartphone size={12} />}
+                        {d.os_platform}
                       </div>
                     </td>
                     <td className="px-4 py-3.5">
-                      <p className="text-sm text-slate-300">{c.full_name}</p>
-                      <p className="text-xs text-slate-600 mt-0.5">{c.phone_number}</p>
+                      <p className="text-sm text-slate-300">{customer?.full_name ?? '—'}</p>
+                      <p className="text-xs text-slate-600 mt-0.5">{customer?.phone_number ?? '—'}</p>
                     </td>
                     <td className="px-4 py-3.5">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
-                        c.payment_status === 'overdue'
+                        d.payment_status === 'overdue'
                           ? 'bg-red-500/15 text-red-400 border border-red-500/20'
                           : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
                       }`}>
-                        {c.payment_status === 'overdue'
+                        {d.payment_status === 'overdue'
                           ? <><Lock size={10} /> Locked</>
                           : <><Unlock size={10} /> Unlocked</>}
                       </span>
                     </td>
                     <td className="px-4 py-3.5">
                       <button
-                        onClick={() => openManageModal(c.id, c.full_name, c.device_model)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openManageModal(d.id, customer?.full_name ?? 'Device', d.device_model);
+                        }}
                         className="inline-flex min-w-[92px] items-center justify-center gap-1.5 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-400 transition-all hover:bg-blue-500/20"
                       >
                         <Smartphone size={12} />
@@ -285,6 +294,9 @@ export function DeviceTable({ customers, onCustomerUpdate }: DeviceTableProps) {
       <DeviceActionModal
         isOpen={!!manageDeviceId}
         onClose={() => setManageDeviceId(null)}
+        onSuccess={() => {
+          fetchDevices();
+        }}
         deviceId={manageDeviceId || ''}
         deviceName={manageDeviceName}
       />

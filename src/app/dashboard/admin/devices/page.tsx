@@ -5,36 +5,36 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Plus, Smartphone } from 'lucide-react';
 import { DeviceTable } from '@/components/dashboard/admin/DeviceTable';
-import type { Customer } from '@/types';
+import type { Device } from '@/types';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 
 export default function AdminDevicesPage() {
   console.log('AdminDevicesPage rendering');
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchCustomers = async () => {
+    const fetchDevices = async () => {
       const supabase = createBrowserSupabaseClient();
       const { data, error } = await supabase
-        .from('customers')
-        .select('*')
+        .from('devices')
+        .select('*, customers(*)')
         .order('created_at', { ascending: false });
 
       if (data && !error) {
-        setCustomers(data);
+        setDevices(data);
       }
       setLoading(false);
     };
-    fetchCustomers();
+    fetchDevices();
   }, []);
 
-  const handleCustomerUpdate = (id: string, updates: Partial<Customer>) => {
-    setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
+  const handleDeviceUpdate = (id: string, updates: Partial<Device>) => {
+    setDevices((prev) => prev.map((d) => (d.id === id ? { ...d, ...updates } : d)));
   };
 
-  const totalDevices = customers.length;
-  const lockedDevices = customers.filter((c) => c.payment_status === 'overdue').length;
+  const totalDevices = devices.length;
+  const lockedDevices = devices.filter((d) => d.payment_status === 'overdue').length;
 
   return (
     <motion.div
@@ -62,7 +62,7 @@ export default function AdminDevicesPage() {
         </Link>
       </div>
       
-      <DeviceTable customers={customers} onCustomerUpdate={handleCustomerUpdate} />
+      <DeviceTable devices={devices} onDeviceUpdate={handleDeviceUpdate} />
     </motion.div>
   );
 }

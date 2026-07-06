@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { lockDevice } from '@/lib/scalefusion';
+import { lockDevice } from '@/lib/hexnode';
 import type { MdmDeviceLockPayload } from '@/types';
 
 export async function POST(request: NextRequest) {
@@ -35,19 +35,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── 4. Fetch customer record ──────────────────────────────────────────────
-    const { data: customer, error: custError } = await supabase
-      .from('customers')
-      .select('id, full_name, miradore_device_id, os_platform')
-      .eq('id', body.customerId)
+    // ── 4. Fetch device record ──────────────────────────────────────────────
+    const { data: device, error: devError } = await supabase
+      .from('devices')
+      .select('id, hexnode_device_id, os_platform, customers(id, full_name)')
+      .eq('customer_id', body.customerId)
+      .limit(1)
       .single();
 
-    if (custError || !customer) {
+    if (devError || !device || !device.customers) {
       return NextResponse.json(
-        { success: false, error: 'Customer not found.' },
+        { success: false, error: 'Customer or device not found.' },
         { status: 404 }
       );
     }
+    const customerFullName = Array.isArray(device.customers) ? device.customers[0]?.full_name : device.customers?.full_name;
 
     // ── 5. Build lock payload ─────────────────────────────────────────────────
     const contactPhone = process.env.LOCK_CONTACT_PHONE ?? '+1-800-000-0000';
@@ -61,8 +63,8 @@ export async function POST(request: NextRequest) {
 
     // ── 6. Fire Miradore lock command ──────────────────────────────────────────
     const mirResult = await lockDevice(
-      customer.miradore_device_id,
-      customer.os_platform,
+      device.hexnode_device_id,
+      device.os_platform as OsPlatform,
       lockPayload
     );
 
@@ -70,7 +72,7 @@ export async function POST(request: NextRequest) {
       // Log failed attempt
       await supabase.from('audit_logs').insert({
         actor_name: user.email ?? 'Unknown',
-        action_description: `LOCK FAILED for ${customer.full_name} (${customer.os_platform}) — ${mirResult.message}`,
+        action_description: `LOCK FAILED for ${customerFullName} (${device.os_platform}) — ${mirResult.message}`,
       });
       return NextResponse.json(
         { success: false, error: mirResult.message ?? 'MDM lock command failed.' },
@@ -78,21 +80,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── 7. Update customer payment_status ──────────────────────────────────────
+    // ── 7. Update device payment_status ──────────────────────────────────────
     await supabase
-      .from('customers')
+      .from('devices')
       .update({ payment_status: 'overdue', updated_at: new Date().toISOString() })
-      .eq('id', body.customerId);
+      .eq('id', device.id);
 
     // ── 8. Write audit log ────────────────────────────────────────────────────
     await supabase.from('audit_logs').insert({
       actor_name: user.email ?? 'Unknown',
-      action_description: `Triggered LOCK on device ${customer.miradore_device_id} (${customer.full_name}) — ${customer.os_platform} ${customer.os_platform === 'iOS' ? 'Lost Mode' : 'Device Lock'} activated`,
+      action_description: `Triggered LOCK on device ${device.hexnode_device_id} (${customerFullName}) — ${device.os_platform} ${device.os_platform === 'iOS' ? 'Lost Mode' : 'Device Lock'} activated`,
     });
 
     return NextResponse.json({
       success: true,
-      data: { message: `Device locked successfully for ${customer.full_name}.` },
+      data: { message: `Device locked successfully for ${customerFullName}.` },
     });
 
   } catch (err) {

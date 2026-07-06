@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { getDeviceDetails } from '@/lib/scalefusion';
+import { getDeviceDetails, getDeviceLocation } from '@/lib/hexnode';
 
 export async function GET(
   request: NextRequest,
@@ -36,10 +36,14 @@ export async function GET(
     }
 
     const details = await getDeviceDetails(deviceId);
+    const location = await getDeviceLocation(deviceId);
 
     return NextResponse.json({
       success: true,
-      data: details,
+      data: {
+        ...details,
+        location,
+      },
     });
   } catch (error) {
     console.error(`[/api/devices/details] Server Error:`, error);

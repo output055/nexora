@@ -54,24 +54,38 @@ export interface Customer {
   occupation?: string;
   place_of_work?: string;
   payment_cycle?: PaymentCycle;
+  created_at: string;
+  updated_at: string;
+  devices?: Device[];
+}
+
+export interface Device {
+  id: string;
+  customer_id: string;
   os_platform: OsPlatform;
   device_model: string;
-  miradore_device_id: string;
+  hexnode_device_id: string;
+  imei?: string;
+  serial_number?: string;
+  os_version?: string;
   total_owed: number;
   remaining_balance: number;
   payment_status: PaymentStatus;
   created_at: string;
   updated_at: string;
+  customer?: Customer;
 }
 
 export interface Payment {
   id: string;
   customer_id: string;
+  device_id: string;
   collector_id: string; // auth.users UUID
   amount_paid: number;
   collection_date: string;
   created_at: string;
   customer?: Customer;
+  device?: Device;
   collector_name?: string;
 }
 

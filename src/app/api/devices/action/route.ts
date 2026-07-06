@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { executeDeviceAction } from '@/lib/scalefusion';
+import { executeDeviceAction } from '@/lib/hexnode';
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,13 +33,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await executeDeviceAction(deviceId, actionType, options);
+    const actionMap: Record<string, string> = {
+      'mark_as_lost': 'enable_lostmode',
+      'mark_as_found': 'disable_lostmode',
+      'disenroll_device': 'disenroll',
+    };
+
+    const mappedAction = actionMap[actionType] || actionType;
+
+    const hexnodeOptions: Record<string, any> = {};
+    if (options.lost_mode_message) hexnodeOptions.message = options.lost_mode_message;
+    if (options.lost_mode_phone) hexnodeOptions.phone_number = options.lost_mode_phone;
+    if (options.lost_mode_footnote) hexnodeOptions.footnote = options.lost_mode_footnote;
+
+    const result = await executeDeviceAction(deviceId, mappedAction, hexnodeOptions);
 
     if (!result.success) {
       return NextResponse.json(
         { success: false, error: result.message || 'Action failed.' },
         { status: result.statusCode || 500 }
       );
+    }
+
+    if (mappedAction === 'disenroll') {
+      const { error: deleteError } = await supabase
+        .from('devices')
+        .delete()
+        .eq('hexnode_device_id', deviceId);
+
+      if (deleteError) {
+        console.error('[/api/devices/action] Error deleting device from DB:', deleteError);
+      }
     }
 
     return NextResponse.json({

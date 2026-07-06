@@ -57,7 +57,7 @@ export default function RetailerPage() {
   useEffect(() => {
     const fetchCustomers = async () => {
       const supabase = createBrowserSupabaseClient();
-      const { data } = await supabase.from('customers').select('*');
+      const { data } = await supabase.from('customers').select('*, devices(*)');
       if (data) setCustomers(data);
     };
     fetchCustomers();
@@ -77,7 +77,7 @@ export default function RetailerPage() {
         return (
           c.full_name.toLowerCase().includes(q) ||
           c.phone_number.includes(q) ||
-          c.device_model.toLowerCase().includes(q)
+          (c.devices?.[0]?.device_model ?? '').toLowerCase().includes(q)
         );
       })
     : [];
@@ -130,8 +130,8 @@ export default function RetailerPage() {
     [selected, reset]
   );
 
-  const progressPct = selected
-    ? Math.min(100, ((selected.total_owed - selected.remaining_balance) / selected.total_owed) * 100)
+  const progressPct = selected && selected.devices?.[0]
+    ? Math.min(100, ((selected.devices[0].total_owed - selected.devices[0].remaining_balance) / selected.devices[0].total_owed) * 100)
     : 0;
 
   return (
@@ -188,13 +188,13 @@ export default function RetailerPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-white truncate">{c.full_name}</p>
-                    <p className="text-xs text-slate-500 mt-0.5 truncate">{c.phone_number} · {c.device_model}</p>
+                    <p className="text-xs text-slate-500 mt-0.5 truncate">{c.phone_number} · {c.devices?.[0]?.device_model ?? '—'}</p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className={`text-sm font-bold ${c.payment_status === 'overdue' ? 'text-red-400' : 'text-emerald-400'}`}>
-                      {c.payment_status === 'overdue' ? '⚠ Overdue' : '✓ Current'}
+                    <p className={`text-sm font-bold ${c.devices?.[0]?.payment_status === 'overdue' ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {c.devices?.[0]?.payment_status === 'overdue' ? '⚠ Overdue' : '✓ Current'}
                     </p>
-                    <p className="text-xs text-slate-600">GH₵{c.remaining_balance.toLocaleString()} left</p>
+                    <p className="text-xs text-slate-600">GH₵{(c.devices?.[0]?.remaining_balance ?? 0).toLocaleString()} left</p>
                   </div>
                 </button>
               ))}
@@ -229,7 +229,7 @@ export default function RetailerPage() {
             <div className="p-5 border-b border-white/5">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-blue-500/15 border border-blue-500/20 flex items-center justify-center shrink-0">
-                  {selected.os_platform === 'iOS' ? (
+                  {selected.devices?.[0]?.os_platform === 'iOS' ? (
                     <Apple size={20} className="text-slate-300" />
                   ) : (
                     <Smartphone size={20} className="text-emerald-400" />
@@ -241,16 +241,16 @@ export default function RetailerPage() {
                     <Phone size={12} className="text-slate-500" />
                     <span className="text-xs text-slate-500">{selected.phone_number}</span>
                   </div>
-                  <p className="text-xs text-slate-600 mt-0.5">{selected.device_model} · {selected.os_platform}</p>
+                  <p className="text-xs text-slate-600 mt-0.5">{selected.devices?.[0]?.device_model ?? '—'} · {selected.devices?.[0]?.os_platform ?? '—'}</p>
                 </div>
                 <div>
                   <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold
-                    ${selected.payment_status === 'overdue'
+                    ${selected.devices?.[0]?.payment_status === 'overdue'
                       ? 'bg-red-500/15 text-red-400 border border-red-500/20'
                       : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
                     }
                   `}>
-                    {selected.payment_status === 'overdue'
+                    {selected.devices?.[0]?.payment_status === 'overdue'
                       ? <><AlertTriangle size={10} /> Overdue</>
                       : <><CheckCircle2 size={10} /> Current</>
                     }
@@ -265,11 +265,11 @@ export default function RetailerPage() {
                 <div>
                   <p className="text-xs text-slate-500">Outstanding Balance</p>
                   <p className="text-3xl font-bold text-white tabular-nums mt-0.5">
-                    GH₵{selected.remaining_balance.toLocaleString()}
+                    GH₵{(selected.devices?.[0]?.remaining_balance ?? 0).toLocaleString()}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-slate-500">of GH₵{selected.total_owed.toLocaleString()} total</p>
+                  <p className="text-xs text-slate-500">of GH₵{(selected.devices?.[0]?.total_owed ?? 0).toLocaleString()} total</p>
                   <p className="text-sm font-semibold text-emerald-400 mt-0.5">
                     {progressPct.toFixed(0)}% paid
                   </p>
@@ -316,7 +316,7 @@ export default function RetailerPage() {
             </AnimatePresence>
 
             {/* Payment form */}
-            {selected.remaining_balance > 0 ? (
+            {(selected.devices?.[0]?.remaining_balance ?? 0) > 0 ? (
               <form onSubmit={handleSubmit(onSubmitPayment)} className="p-5">
                 <label htmlFor="payment-amount" className="block text-xs font-medium text-slate-400 mb-2">
                   Payment Amount (GH₵)
@@ -359,7 +359,7 @@ export default function RetailerPage() {
                     <button
                       key={amt}
                       type="button"
-                      onClick={() => setValue('amount', String(Math.min(amt, selected.remaining_balance)), { shouldValidate: true })}
+                      onClick={() => setValue('amount', String(Math.min(amt, selected.devices?.[0]?.remaining_balance ?? 0)), { shouldValidate: true })}
                       className="px-3 py-1.5 rounded-xl bg-white/5 text-slate-400 hover:bg-white/8 hover:text-white text-xs font-medium transition-all border border-white/5"
                     >
                       GH₵{(amt / 1000).toFixed(0)}k
@@ -367,10 +367,10 @@ export default function RetailerPage() {
                   ))}
                   <button
                     type="button"
-                    onClick={() => setValue('amount', String(selected.remaining_balance), { shouldValidate: true })}
+                    onClick={() => setValue('amount', String(selected.devices?.[0]?.remaining_balance ?? 0), { shouldValidate: true })}
                     className="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15 text-xs font-semibold transition-all border border-emerald-500/20"
                   >
-                    Full (GH₵{selected.remaining_balance.toLocaleString()})
+                    Full (GH₵{(selected.devices?.[0]?.remaining_balance ?? 0).toLocaleString()})
                   </button>
                 </div>
 

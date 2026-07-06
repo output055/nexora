@@ -8,35 +8,45 @@ import { toast } from 'sonner';
 interface DeviceActionModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
   deviceId: string;
   deviceName: string;
 }
 
 type DeviceDetails = {
   id: number;
-  model: string;
-  make: string;
-  serial_no: string;
-  os_type: string;
-  os_version: string;
-  charging: boolean;
-  locked: boolean;
-  last_connected_at: string;
-  battery_status?: number;
+  udid?: string;
+  platform?: string;
+  enrollment_status?: string;
+  lastreported?: string;
+  lostmode?: boolean;
+  device?: {
+    model_name?: string;
+    model?: string;
+    manufacture?: string;
+    serial_number?: string;
+    os_name?: string;
+    os_version?: string;
+    battery_level?: number;
+  };
+  network?: {
+    last_connected_date?: string;
+  };
+  location?: {
+    latitude: string;
+    longitude: string;
+    reported_time?: string;
+    long_name?: string;
+  };
 };
 
 const AVAILABLE_ACTIONS = [
-  { id: 'screen_lock', label: 'Lock Screen', icon: ShieldAlert, destructive: false },
-  { id: 'shutdown', label: 'Shutdown', icon: Terminal, destructive: false },
-  { id: 'reboot', label: 'Reboot', icon: Terminal, destructive: false },
-  { id: 'mark_as_lost', label: 'Mark as Lost', icon: AlertTriangle, destructive: false },
-  { id: 'mark_as_found', label: 'Mark as Found', icon: Check, destructive: false },
-  { id: 'buzz_device', label: 'Buzz Device', icon: Smartphone, destructive: false },
-  { id: 'factory_reset', label: 'Factory Reset', icon: AlertTriangle, destructive: true },
-  { id: 'delete_device', label: 'Delete Device', icon: AlertTriangle, destructive: true },
+  { id: 'mark_as_lost', label: 'Put to Lock Mode', icon: ShieldAlert, destructive: false },
+  { id: 'mark_as_found', label: 'Remove from Lock Mode', icon: Check, destructive: false },
+  { id: 'disenroll_device', label: 'Delete Device', icon: AlertTriangle, destructive: true },
 ];
 
-export function DeviceActionModal({ isOpen, onClose, deviceId, deviceName }: DeviceActionModalProps) {
+export function DeviceActionModal({ isOpen, onClose, onSuccess, deviceId, deviceName }: DeviceActionModalProps) {
   const [loading, setLoading] = useState(true);
   const [details, setDetails] = useState<DeviceDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +80,7 @@ export function DeviceActionModal({ isOpen, onClose, deviceId, deviceName }: Dev
         if (!isMounted) return;
 
         if (json.success && json.data) {
-          setDetails(json.data.device || json.data);
+          setDetails(json.data);
         } else {
           setError(json.error || 'Failed to fetch details');
         }
@@ -127,6 +137,7 @@ export function DeviceActionModal({ isOpen, onClose, deviceId, deviceName }: Dev
 
       if (json.success) {
         toast.success(`Successfully executed ${currentAction?.label}`);
+        onSuccess?.();
         onClose();
       } else {
         toast.error(json.error || 'Failed to execute action');
@@ -171,7 +182,7 @@ export function DeviceActionModal({ isOpen, onClose, deviceId, deviceName }: Dev
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                 <Loader2 size={32} className="animate-spin mb-4" />
-                <p>Connecting to Scalefusion...</p>
+                <p>Connecting to Hexnode...</p>
               </div>
             ) : error ? (
               <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 flex items-start gap-3">
@@ -182,16 +193,41 @@ export function DeviceActionModal({ isOpen, onClose, deviceId, deviceName }: Dev
               <>
                 {/* Device Info */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  <InfoCard label="Model" value={details.model || 'Unknown'} />
-                  <InfoCard label="Make" value={details.make || 'Unknown'} />
-                  <InfoCard label="OS" value={`${details.os_type || 'N/A'} ${details.os_version || ''}`} />
-                  <InfoCard label="Serial No" value={details.serial_no || 'Unknown'} />
-                  <InfoCard label="Battery" value={details.battery_status ? `${details.battery_status}% ${details.charging ? '(Charging)' : ''}` : 'Unknown'} />
-                  <InfoCard label="Status" value={details.locked ? 'Locked' : 'Unlocked'} valueClass={details.locked ? 'text-red-400' : 'text-emerald-400'} />
+                  <InfoCard label="Model" value={details.device?.model_name || details.device?.model || 'Unknown'} />
+                  <InfoCard label="Make" value={details.device?.manufacture || 'Unknown'} />
+                  <InfoCard label="OS" value={`${details.device?.os_name || details.platform || 'N/A'} ${details.device?.os_version || ''}`} />
+                  <InfoCard label="Serial No" value={details.device?.serial_number || 'Unknown'} />
+                  <InfoCard label="Battery" value={details.device?.battery_level != null ? `${details.device.battery_level}%` : 'Unknown'} />
+                  <InfoCard 
+                    label="MDM Status" 
+                    value={details.lostmode ? 'Lost Mode' : (details.enrollment_status ? details.enrollment_status.charAt(0).toUpperCase() + details.enrollment_status.slice(1) : 'Unknown')} 
+                    valueClass={details.lostmode ? 'text-red-400' : 'text-emerald-400'} 
+                  />
                   <div className="col-span-2 sm:col-span-3">
-                    <InfoCard label="Last Connected" value={details.last_connected_at ? new Date(details.last_connected_at).toLocaleString() : 'Never'} />
+                    <InfoCard label="Last Reported" value={details.lastreported ? new Date(details.lastreported).toLocaleString() : 'Never'} />
                   </div>
                 </div>
+
+                {/* Device Location Map */}
+                {details.location?.latitude && details.location?.longitude && (
+                  <div className="rounded-xl overflow-hidden border border-white/10 bg-white/5 h-[200px] relative">
+                    <iframe
+                      width="100%"
+                      height="100%"
+                      frameBorder="0"
+                      scrolling="no"
+                      marginHeight={0}
+                      marginWidth={0}
+                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${parseFloat(details.location.longitude) - 0.01},${parseFloat(details.location.latitude) - 0.01},${parseFloat(details.location.longitude) + 0.01},${parseFloat(details.location.latitude) + 0.01}&layer=mapnik&marker=${details.location.latitude},${details.location.longitude}`}
+                      className="absolute inset-0"
+                    ></iframe>
+                    {details.location.long_name && (
+                      <div className="absolute bottom-2 left-2 right-2 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs text-white truncate border border-white/10 pointer-events-none">
+                        {details.location.long_name}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Actions Selection */}
                 <div className="space-y-3 pt-4 border-t border-white/10">

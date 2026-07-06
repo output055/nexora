@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { unlockDevice } from '@/lib/scalefusion';
+import { unlockDevice } from '@/lib/hexnode';
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,27 +34,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── 4. Fetch customer record ──────────────────────────────────────────────
-    const { data: customer, error: custError } = await supabase
-      .from('customers')
-      .select('id, full_name, miradore_device_id, os_platform, remaining_balance')
-      .eq('id', body.customerId)
+    // ── 4. Fetch device record ──────────────────────────────────────────────
+    const { data: device, error: devError } = await supabase
+      .from('devices')
+      .select('id, hexnode_device_id, os_platform, remaining_balance, customers(id, full_name)')
+      .eq('customer_id', body.customerId)
+      .limit(1)
       .single();
 
-    if (custError || !customer) {
+    if (devError || !device || !device.customers) {
       return NextResponse.json(
-        { success: false, error: 'Customer not found.' },
+        { success: false, error: 'Customer or device not found.' },
         { status: 404 }
       );
     }
+    const customerFullName = Array.isArray(device.customers) ? device.customers[0]?.full_name : device.customers?.full_name;
 
     // ── 5. Fire Miradore unlock command ───────────────────────────────────────
-    const mirResult = await unlockDevice(customer.miradore_device_id, customer.os_platform);
+    const mirResult = await unlockDevice(device.hexnode_device_id, device.os_platform);
 
     if (!mirResult.success) {
       await supabase.from('audit_logs').insert({
         actor_name: user.email ?? 'Unknown',
-        action_description: `UNLOCK FAILED for ${customer.full_name} (${customer.os_platform}) — ${mirResult.message}`,
+        action_description: `UNLOCK FAILED for ${customerFullName} (${device.os_platform}) — ${mirResult.message}`,
       });
       return NextResponse.json(
         { success: false, error: mirResult.message ?? 'MDM unlock command failed.' },
@@ -62,25 +64,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── 6. Update customer payment_status ──────────────────────────────────────
+    // ── 6. Update device payment_status ──────────────────────────────────────
     await supabase
-      .from('customers')
+      .from('devices')
       .update({
         payment_status: 'current',
         updated_at: new Date().toISOString(),
       })
-      .eq('id', body.customerId);
+      .eq('id', device.id);
 
     // ── 7. Write audit log ────────────────────────────────────────────────────
     const isAuto = body.isAutoUnlock === true;
     await supabase.from('audit_logs').insert({
       actor_name: isAuto ? 'System (auto)' : user.email ?? 'Unknown',
-      action_description: `${isAuto ? 'AUTO ' : ''}UNLOCK triggered for device ${customer.miradore_device_id} (${customer.full_name}) — balance cleared`,
+      action_description: `${isAuto ? 'AUTO ' : ''}UNLOCK triggered for device ${device.hexnode_device_id} (${customerFullName}) — balance cleared`,
     });
 
     return NextResponse.json({
       success: true,
-      data: { message: `Device unlocked successfully for ${customer.full_name}.` },
+      data: { message: `Device unlocked successfully for ${customerFullName}.` },
     });
 
   } catch (err) {
