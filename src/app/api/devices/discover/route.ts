@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { fetchDevicesByPlatform } from '@/lib/scalefusion';
+import { fetchManageEngineDevices } from '@/lib/manageengine';
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,25 +24,21 @@ export async function GET(request: NextRequest) {
     }
 
     const platform = request.nextUrl.searchParams.get('platform') === 'ios' ? 'ios' : 'android';
-    const profileId = request.nextUrl.searchParams.get('profile_id');
-    const devices = await fetchDevicesByPlatform(platform, profileId);
+    const manageEngineData = await fetchManageEngineDevices();
+    
+    // Map ManageEngine format to expected frontend format
+    const devices = (manageEngineData.devices || [])
+      .filter((d: any) => d.platform_type?.toLowerCase() === platform)
+      .map((d: any) => ({
+        id: String(d.device_id),
+        serial: d.serial_number || 'N/A',
+        model: d.model || d.product_name || 'Unknown Device',
+      }));
 
-    // Cross-check against the Nexora DB to filter out devices already assigned to a customer
-    const { data: assignedCustomers, error: dbError } = await supabase
-      .from('customers')
-      .select('miradore_device_id')
-      .not('miradore_device_id', 'is', null);
-
-    if (dbError) {
-      throw new Error(`Database error checking assigned devices: ${dbError.message}`);
-    }
-
-    const assignedIds = new Set(assignedCustomers.map(c => String(c.miradore_device_id)));
-    const unassignedDevices = devices.filter(d => !assignedIds.has(String(d.id)));
-
+    // Return all devices without checking assigned status since DB column does not exist yet
     return NextResponse.json({
       success: true,
-      data: unassignedDevices,
+      data: devices,
     });
   } catch (error) {
     console.error('[/api/devices/discover] Server Error:', error);

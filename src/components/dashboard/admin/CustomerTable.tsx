@@ -267,11 +267,11 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                   </td>
                   <td className="px-4 py-3.5">
                     <p className={`text-sm font-bold tabular-nums ${
-                      c.remaining_balance > 0 ? 'text-white' : 'text-emerald-400'
+                      (c.remaining_balance || 0) > 0 ? 'text-white' : 'text-emerald-400'
                     }`}>
-                      {c.remaining_balance === 0 ? 'Paid ✓' : `GH₵${c.remaining_balance.toLocaleString()}`}
+                      {(c.remaining_balance || 0) === 0 ? 'Paid ✓' : `GH₵${(c.remaining_balance || 0).toLocaleString()}`}
                     </p>
-                    <p className="text-xs text-slate-600 mt-0.5">of GH₵{c.total_owed.toLocaleString()}</p>
+                    <p className="text-xs text-slate-600 mt-0.5">of GH₵{(c.total_owed || 0).toLocaleString()}</p>
                   </td>
                   <td className="px-4 py-3.5">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${

@@ -16,6 +16,7 @@ import {
   FileText,
   ShieldCheck,
   Smartphone,
+  Map,
   X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -46,6 +47,12 @@ const adminNavItems: NavItem[] = [
     label: 'Device Management',
     href: '/dashboard/admin/devices',
     icon: <Smartphone size={18} />,
+    permission: 'manage_devices',
+  },
+  {
+    label: 'MDM Map & Audit',
+    href: '/dashboard/admin/mdm',
+    icon: <Map size={18} />,
     permission: 'manage_devices',
   },
   {
