@@ -28,7 +28,14 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
     if (input.deviceId) {
       const { data: device, error: deviceError } = await supabase
         .from('devices')
-        .select('payment_status, remaining_balance, mdm_device_id')
+        .select(`
+          payment_status, 
+          remaining_balance, 
+          mdm_device_id, 
+          payment_cycle_amount, 
+          next_payment_date, 
+          customers(payment_cycle)
+        `)
         .eq('id', input.deviceId)
         .single();
         
@@ -55,18 +62,40 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
       return { success: false, error: insertError.message };
     }
 
-    // 4. Check if we need to Unlock the device via ManageEngine
-    if (deviceBeforePayment && deviceBeforePayment.payment_status === 'overdue') {
-      // If payment covers the required amount (for simplicity here, any payment might unlock it, 
-      // but ideally we check if remaining_balance is in good standing based on cycle)
-      // Let's assume we unlock it if a payment is made and update status to current.
+      // Calculate next payment date advancement
+      let nextDate = deviceBeforePayment?.next_payment_date 
+        ? new Date(deviceBeforePayment.next_payment_date) 
+        : new Date();
+        
+      if (deviceBeforePayment && deviceBeforePayment.payment_cycle_amount > 0) {
+        const cycle = deviceBeforePayment.customers?.payment_cycle || 'monthly';
+        const ratio = input.amount / deviceBeforePayment.payment_cycle_amount;
+        
+        let daysToAdd = 0;
+        if (cycle === 'daily') daysToAdd = ratio * 1;
+        else if (cycle === 'weekly') daysToAdd = ratio * 7;
+        else if (cycle === 'bi_weekly') daysToAdd = ratio * 14;
+        else daysToAdd = ratio * 30; // fallback monthly
+        
+        nextDate.setHours(nextDate.getHours() + (daysToAdd * 24));
+      }
+
+      // If they are currently overdue, we unlock them AND update the next payment date.
+      // Even if they are 'current', we should still advance their next payment date!
+      const updatePayload: any = { next_payment_date: nextDate.toISOString() };
+      
+      let needsUnlock = false;
+      if (deviceBeforePayment && deviceBeforePayment.payment_status === 'overdue') {
+        updatePayload.payment_status = 'current';
+        needsUnlock = true;
+      }
       
       const { error: updateError } = await supabase
         .from('devices')
-        .update({ payment_status: 'current' })
+        .update(updatePayload)
         .eq('id', input.deviceId);
 
-      if (!updateError) {
+      if (!updateError && needsUnlock) {
         // Trigger MDM Unlock Command
         try {
           const lockCommand = await getSystemSetting('mdm_overdue_lock_command') || 'LostMode';
@@ -88,7 +117,6 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
           // Don't fail the payment if MDM fails, just log it.
         }
       }
-    }
 
     revalidatePath('/dashboard/admin/customers');
     return { success: true };

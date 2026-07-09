@@ -67,6 +67,11 @@ export interface Device {
   imei?: string;
   serial_number?: string;
   os_version?: string;
+  base_price?: number;
+  contract_duration_months?: number;
+  down_payment?: number;
+  payment_cycle_amount?: number;
+  next_payment_date?: string;
   total_owed: number;
   remaining_balance: number;
   payment_status: PaymentStatus;

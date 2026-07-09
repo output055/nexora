@@ -55,7 +55,8 @@ type RegisterForm = {
   payment_cycle: PaymentCycle | '';
   device_model: string;
   mdm_device_id: string;
-  total_owed: string;
+  base_price: string;
+  contract_duration_months: string;
 };
 
 type RegisterResponse = {
@@ -93,7 +94,8 @@ const emptyForm: RegisterForm = {
   payment_cycle: '',
   device_model: '',
   mdm_device_id: '',
-  total_owed: '',
+  base_price: '',
+  contract_duration_months: '6',
 };
 
 // Android gets 6 steps: QR Enrollment → Device → Identity → Contact → Location → Work
@@ -181,8 +183,10 @@ export default function DeviceOnboardingPage() {
 
     if (step === 'device') {
       if (!selectedDeviceId) return `Select a discovered ${workflow} device from the list.`;
-      if (!activeForm.total_owed) return 'Enter the total financed amount.';
-      if (!Number.isFinite(Number(activeForm.total_owed)) || Number(activeForm.total_owed) <= 0) return 'Total financed amount must be a positive number.';
+      if (!activeForm.base_price) return 'Enter the device base price.';
+      if (!Number.isFinite(Number(activeForm.base_price)) || Number(activeForm.base_price) <= 0) return 'Base price must be a positive number.';
+      if (!activeForm.contract_duration_months) return 'Enter the contract duration.';
+      if (!Number.isFinite(Number(activeForm.contract_duration_months)) || Number(activeForm.contract_duration_months) <= 0) return 'Contract duration must be positive.';
     }
 
     if (step === 'identity') {
@@ -259,7 +263,9 @@ export default function DeviceOnboardingPage() {
     formData.set('os_platform', platform);
     formData.set('device_model', form.device_model);
     formData.set('mdm_device_id', form.mdm_device_id);
-    formData.set('total_owed', form.total_owed);
+    formData.set('base_price', form.base_price);
+    formData.set('contract_duration_months', form.contract_duration_months);
+
     if (form.ghana_card_scan) formData.set('ghana_card_scan', form.ghana_card_scan);
 
     const response = await fetch('/api/devices/register', {
@@ -719,7 +725,11 @@ function DeviceStep({
       <div className="grid gap-4 sm:grid-cols-2">
         <Input id={`${workflow}-model`} label="Device Model" value={form.device_model} onChange={(value) => onChange('device_model', value)} disabled={Boolean(selectedDevice)} required />
         <Input id={`${workflow}-device-id`} label="Scalefusion Device ID" value={form.mdm_device_id} onChange={(value) => onChange('mdm_device_id', value)} disabled={Boolean(selectedDevice)} required />
-        <Input id={`${workflow}-total`} label="Total Financed Amount" type="number" min="1" step="1" value={form.total_owed} onChange={(value) => onChange('total_owed', value)} required />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Input id={`${workflow}-base`} label="Device Base Price (GH₵)" type="number" min="1" step="1" value={form.base_price} onChange={(value) => onChange('base_price', value)} required />
+        <Input id={`${workflow}-duration`} label="Contract Duration (Months)" type="number" min="1" step="1" value={form.contract_duration_months} onChange={(value) => onChange('contract_duration_months', value)} required />
       </div>
     </div>
   );

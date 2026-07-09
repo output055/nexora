@@ -13,23 +13,14 @@ export async function GET(request: Request) {
   try {
     const supabase = createServiceRoleSupabaseClient();
     
-    // In a real scenario, this query would check `payment_cycle` against the last payment date.
-    // For simplicity, we find devices that are currently 'current' but have missed their cycle
-    // (e.g. they owe > 0 and their next expected payment date has passed).
-    // Let's assume we have a view or SQL function, but for now we just select those matching a simple condition.
-    // For this demonstration, let's just fetch all devices that should be locked.
-    // E.g., `remaining_balance > 0 AND last_payment_date < NOW() - INTERVAL '1 week'`
-    
-    // Since we don't have the exact cycle logic fully built into SQL yet, 
-    // we'll mock the query to get theoretically overdue devices.
-    
-    // NOTE: This logic needs to be tailored to the exact schema definition of 'due date'.
+    // The cron job will look for devices where next_payment_date has passed,
+    // and they still have a remaining balance > 0.
     const { data: overdueDevices, error } = await supabase
       .from('devices')
       .select('id, mdm_device_id, customer_id')
       .eq('payment_status', 'current')
-      .gt('remaining_balance', 0);
-      // .lt('next_payment_due', new Date().toISOString()); // Assuming a next_payment_due column existed
+      .gt('remaining_balance', 0)
+      .lt('next_payment_date', new Date().toISOString());
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

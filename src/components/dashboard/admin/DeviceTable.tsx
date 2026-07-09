@@ -3,13 +3,14 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { Search, Lock, Unlock, Loader2, Apple, Smartphone, ChevronUp, ChevronDown, X, Banknote } from 'lucide-react';
+import { Search, Lock, Unlock, Loader2, Apple, Smartphone, ChevronUp, ChevronDown, X, Edit2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Customer } from '@/types';
 import type { DeviceWithCustomer } from '@/app/dashboard/admin/devices/page';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { PaginationBar } from './PaginationBar';
-import LogPaymentForm from '@/components/dashboard/payments/LogPaymentForm';
+import { EditDeviceModal } from './EditDeviceModal';
+import { deleteDeviceAction } from '@/app/actions/device-db';
 
 interface DeviceTableProps {
   devices: DeviceWithCustomer[];
@@ -27,7 +28,23 @@ export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
   const [filterLock, setFilterLock] = useState<LockFilter>('all');
   const [sortKey, setSortKey] = useState<SortKey>('device_model');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
-  const [selectedDeviceForPayment, setSelectedDeviceForPayment] = useState<DeviceWithCustomer | null>(null);
+  const [editingDevice, setEditingDevice] = useState<DeviceWithCustomer | null>(null);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this device? This action cannot be undone.')) return;
+    
+    setIsDeleting(id);
+    const { success, error } = await deleteDeviceAction(id);
+    
+    if (success) {
+      toast.success('Device deleted successfully');
+      window.location.reload(); 
+    } else {
+      toast.error(error || 'Failed to delete device');
+    }
+    setIsDeleting(null);
+  };
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
@@ -239,15 +256,22 @@ export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
                           <Smartphone size={12} />
                           Manage
                         </Link>
-                        {d.remaining_balance > 0 && (
-                          <button
-                            onClick={() => setSelectedDeviceForPayment(d)}
-                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-purple-500/20 bg-purple-500/10 px-3 py-1.5 text-xs font-semibold text-purple-400 transition-all hover:bg-purple-500/20"
-                          >
-                            <Banknote size={12} />
-                            Pay
-                          </button>
-                        )}
+                        <button
+                          onClick={() => setEditingDevice(d)}
+                          disabled={isDeleting === d.id}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-400 transition-all hover:bg-blue-500/20 disabled:opacity-50"
+                        >
+                          <Edit2 size={12} />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(d.id)}
+                          disabled={isDeleting === d.id}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 transition-all hover:bg-red-500/20 disabled:opacity-50"
+                        >
+                          {isDeleting === d.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                          Delete
+                        </button>
                       </div>
                     </td>
                   </motion.tr>
@@ -284,31 +308,17 @@ export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
       />
 
       {/* Payment Modal */}
-      <AnimatePresence>
-        {selectedDeviceForPayment && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="relative"
-            >
-              <button
-                onClick={() => setSelectedDeviceForPayment(null)}
-                className="absolute -top-4 -right-4 p-2 bg-gray-800 rounded-full text-gray-400 hover:text-white"
-              >
-                <X size={16} />
-              </button>
-              <LogPaymentForm
-                customerId={selectedDeviceForPayment.customer_id}
-                deviceId={selectedDeviceForPayment.id}
-                remainingBalance={Number(selectedDeviceForPayment.remaining_balance) || 0}
-                customerEmail="customer@nexora.test" // Mock email for Paystack demo
-              />
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {editingDevice && (
+        <EditDeviceModal
+          device={editingDevice}
+          onClose={() => setEditingDevice(null)}
+          onSuccess={(updates) => {
+            if (onDeviceUpdate) {
+              onDeviceUpdate(editingDevice.id, updates);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
 import { updateDeviceAssetOwner } from '@/lib/scalefusion';
+import { calculatePaymentPlan, calculateNextPaymentDate } from '@/lib/utils/calculator';
 import type { Customer, OsPlatform, PaymentCycle, ResidentialStatus } from '@/types';
 
 type RegisterDevicePayload = {
@@ -20,7 +21,8 @@ type RegisterDevicePayload = {
   os_platform: OsPlatform;
   device_model: string;
   mdm_device_id: string;
-  total_owed: number;
+  base_price: number;
+  contract_duration_months: number;
   ghana_card_scan: File;
 };
 
@@ -52,14 +54,16 @@ function parseRegisterPayload(formData: FormData):
     os_platform: cleanString(formData, 'os_platform'),
     device_model: cleanString(formData, 'device_model'),
     mdm_device_id: cleanString(formData, 'mdm_device_id'),
-    total_owed: Number(cleanString(formData, 'total_owed')),
+    base_price: Number(cleanString(formData, 'base_price')),
+    contract_duration_months: Number(cleanString(formData, 'contract_duration_months')),
     ghana_card_scan: formData.get('ghana_card_scan'),
   };
 
   if (!payload.device_model) return { error: 'Device model is required.' };
-  if (!payload.mdm_device_id) return { error: 'Miradore device id, serial, or IMEI is required.' };
+  if (!payload.mdm_device_id) return { error: 'MDM device id is required.' };
   if (!['iOS', 'Android'].includes(payload.os_platform)) return { error: 'os_platform must be iOS or Android.' };
-  if (!Number.isFinite(payload.total_owed) || payload.total_owed <= 0) return { error: 'Total financed amount must be a positive number.' };
+  if (!Number.isFinite(payload.base_price) || payload.base_price <= 0) return { error: 'Base price must be a positive number.' };
+  if (!Number.isFinite(payload.contract_duration_months) || payload.contract_duration_months <= 0) return { error: 'Contract duration must be a positive number of months.' };
 
   if (!payload.ghana_card_id) return { error: 'Ghana Card ID is required.' };
   if (!GHANA_CARD_PATTERN.test(payload.ghana_card_id)) return { error: 'Ghana Card ID must match GHA-XXXXXXXXX-X.' };
@@ -182,6 +186,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const plan = calculatePaymentPlan({
+      basePrice: payload.base_price,
+      durationMonths: payload.contract_duration_months,
+      cycle: payload.payment_cycle
+    });
+
+    const nextPaymentDate = calculateNextPaymentDate(new Date(), payload.payment_cycle);
+
     const { data: device, error: deviceError } = await admin
       .from('devices')
       .insert({
@@ -192,8 +204,13 @@ export async function POST(request: NextRequest) {
         imei: payload.imei || null,
         serial_number: payload.serial_number || null,
         os_version: payload.os_version || null,
-        total_owed: payload.total_owed,
-        remaining_balance: payload.total_owed,
+        base_price: plan.basePrice,
+        contract_duration_months: payload.contract_duration_months,
+        down_payment: plan.downPayment,
+        payment_cycle_amount: plan.paymentCycleAmount,
+        total_owed: plan.totalContractValue,
+        remaining_balance: plan.totalContractValue, // user hasn't made down payment in the system yet. Wait, if they make down payment during onboarding? We'll leave it as total for now.
+        next_payment_date: nextPaymentDate.toISOString(),
         payment_status: 'current',
       })
       .select('*')
@@ -253,3 +270,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+// trigger recompilation

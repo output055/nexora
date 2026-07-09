@@ -2,15 +2,21 @@
 
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Apple, Smartphone, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { Search, Apple, Smartphone, ChevronUp, ChevronDown, X, MoreVertical, Edit2, Trash2, Eye, CreditCard } from 'lucide-react';
 import type { Customer } from '@/types';
 import type { CustomerWithDevices } from '@/app/dashboard/admin/customers/page';
+import Link from 'next/link';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { PaginationBar } from './PaginationBar';
+import { EditCustomerModal } from './EditCustomerModal';
+import LogPaymentForm from '@/components/dashboard/payments/LogPaymentForm';
+import { deleteCustomerAction } from '@/app/actions/customers';
+import { toast } from 'sonner';
 
 interface CustomerTableProps {
   customers: CustomerWithDevices[];
   onCustomerUpdate?: (customerId: string, updates: Partial<CustomerWithDevices>) => void;
+  onCustomerDelete?: (customerId: string) => void;
 }
 
 type SortKey = 'full_name' | 'remaining_balance' | 'payment_status' | 'created_at';
@@ -26,6 +32,9 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
   const [filterCycle, setFilterCycle] = useState<CycleFilter>('all');
   const [sortKey, setSortKey] = useState<SortKey>('created_at');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [editingCustomer, setEditingCustomer] = useState<CustomerWithDevices | null>(null);
+  const [payingCustomer, setPayingCustomer] = useState<{ customer: CustomerWithDevices, deviceId: string | null } | null>(null);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
@@ -104,6 +113,27 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
     daily: 'Daily',
     weekly: 'Weekly',
     bi_weekly: 'Bi-weekly',
+    monthly: 'Monthly',
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this customer? This action cannot be undone.')) return;
+    
+    setIsDeleting(id);
+    const { success, error } = await deleteCustomerAction(id);
+    
+    if (success) {
+      toast.success('Customer deleted successfully');
+      // Optimistic delete: hide it locally by updating via prop or just re-fetching.
+      // Assuming onCustomerUpdate handles it or we'll add onCustomerDelete prop.
+      // Wait, there's no onCustomerDelete in the parent, but I added it to props.
+      // Let's call onCustomerUpdate with null or something. Actually, we'll just wait for the parent to refresh.
+      // Let's rely on window.location.reload() or let parent handle it.
+      window.location.reload(); 
+    } else {
+      toast.error(error || 'Failed to delete customer');
+    }
+    setIsDeleting(null);
   };
 
   return (
@@ -222,6 +252,7 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                 { label: 'Outstanding', key: 'remaining_balance' as SortKey },
                 { label: 'Status', key: 'payment_status' as SortKey },
                 { label: 'Registered', key: 'created_at' as SortKey },
+                { label: '', key: null }, // Actions column
               ].map(({ label, key }) => (
                 <th
                   key={label}
@@ -278,9 +309,14 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                     )}
                   </td>
                   <td className="px-4 py-3.5">
-                    <span className="text-xs text-slate-400 capitalize">
+                    <p className="text-sm text-slate-300 capitalize">
                       {c.payment_cycle ? cycleLabel[c.payment_cycle] ?? c.payment_cycle : '—'}
-                    </span>
+                    </p>
+                    {primaryDevice?.payment_cycle_amount ? (
+                      <p className="text-xs font-semibold text-emerald-400 mt-0.5">
+                        GH₵{Number(primaryDevice.payment_cycle_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </p>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3.5">
                     <p className={`text-sm font-bold tabular-nums ${
@@ -308,6 +344,50 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                         day: '2-digit', month: 'short', year: 'numeric'
                       })}
                     </p>
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Link
+                        href={`/dashboard/admin/customers/${c.id}`}
+                        className="p-1.5 text-slate-400 hover:text-indigo-400 bg-transparent hover:bg-indigo-500/10 rounded-lg transition-colors"
+                        title="View Details & History"
+                      >
+                        <Eye size={16} />
+                      </Link>
+                      {primaryDevice?.mdm_device_id && (
+                        <Link
+                          href={`/dashboard/admin/mdm?deviceId=${primaryDevice.mdm_device_id}`}
+                          className="p-1.5 text-slate-400 hover:text-sky-400 bg-transparent hover:bg-sky-500/10 rounded-lg transition-colors"
+                          title="Manage Device"
+                        >
+                          <Smartphone size={16} />
+                        </Link>
+                      )}
+                      <button
+                        onClick={() => setPayingCustomer({ customer: c, deviceId: primaryDevice?.id || null })}
+                        disabled={isDeleting === c.id}
+                        className="p-1.5 text-slate-400 hover:text-emerald-400 bg-transparent hover:bg-emerald-500/10 rounded-lg transition-colors"
+                        title="Log Payment"
+                      >
+                        <CreditCard size={16} />
+                      </button>
+                      <button
+                        onClick={() => setEditingCustomer(c)}
+                        disabled={isDeleting === c.id}
+                        className="p-1.5 text-slate-400 hover:text-blue-400 bg-transparent hover:bg-blue-500/10 rounded-lg transition-colors"
+                        title="Edit Customer"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(c.id)}
+                        disabled={isDeleting === c.id}
+                        className="p-1.5 text-slate-400 hover:text-red-400 bg-transparent hover:bg-red-500/10 rounded-lg transition-colors"
+                        title="Delete Customer"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </motion.tr>
               )})}
@@ -340,6 +420,44 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
         onPageSizeChange={pagination.setPageSize}
         itemLabel="accounts"
       />
+
+      {editingCustomer && (
+        <EditCustomerModal
+          customer={editingCustomer}
+          onClose={() => setEditingCustomer(null)}
+          onSuccess={(updates) => {
+            if (onCustomerUpdate) {
+              onCustomerUpdate(editingCustomer.id, updates);
+            }
+          }}
+        />
+      )}
+
+      <AnimatePresence>
+        {payingCustomer && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-md"
+            >
+              <button
+                onClick={() => setPayingCustomer(null)}
+                className="absolute -top-4 -right-4 p-2 bg-gray-800 rounded-full text-gray-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+              <LogPaymentForm
+                customerId={payingCustomer.customer.id}
+                deviceId={payingCustomer.deviceId || undefined}
+                remainingBalance={Number(payingCustomer.customer.devices?.[0]?.remaining_balance) || 0}
+                customerEmail="customer@nexora.test" 
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
