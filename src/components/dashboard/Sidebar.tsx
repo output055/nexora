@@ -73,6 +73,7 @@ const adminNavItems: NavItem[] = [
     subItems: [
       { label: 'System Users', href: '/dashboard/admin/users', icon: <Users size={16} />, permission: 'manage_roles' },
       { label: 'Roles & Permissions', href: '/dashboard/admin/settings', icon: <ShieldCheck size={16} />, permission: 'manage_roles' },
+      { label: 'System Settings', href: '/dashboard/admin/system-settings', icon: <Settings size={16} />, permission: 'view_settings' },
     ],
   },
 ];

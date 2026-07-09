@@ -13,6 +13,7 @@ import {
   getDeviceAlerts,
   sendDeviceCommand
 } from '@/lib/manageengine';
+import { getAllSystemSettings } from './settings';
 
 /**
  * Get all devices (general list)
@@ -128,7 +129,27 @@ export async function getDeviceAlertsAction(deviceId: string) {
  */
 export async function executeDeviceCommandAction(deviceId: string, commandName: string, commandData: any = {}) {
   try {
-    const data = await sendDeviceCommand(deviceId, commandName, commandData);
+    let payload = { ...commandData };
+
+    // Auto-inject settings for Lost Mode / Kiosk Mode if missing
+    if (commandName === 'enable_lost_mode' || commandName === 'LostMode' || commandName === 'KioskMode') {
+      const settings = await getAllSystemSettings();
+      
+      if (commandName === 'enable_lost_mode' || commandName === 'LostMode') {
+        payload.lock_message = payload.lock_message || settings['mdm_lost_mode_message'] || 'Your device has been locked.';
+        payload.phone_number = payload.phone_number || settings['mdm_lost_mode_phone'] || '';
+        
+        // Ensure invalid parameters aren't sent
+        delete payload.message;
+        delete payload.lost_mode_message;
+      }
+      
+      if (commandName === 'KioskMode' && !payload.passcode) {
+        payload.passcode = settings['mdm_kiosk_pin'] || '1234';
+      }
+    }
+
+    const data = await sendDeviceCommand(deviceId, commandName, payload);
     return { success: true, data };
   } catch (error: any) {
     console.error(`Action error sending command ${commandName}:`, error);

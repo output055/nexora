@@ -29,21 +29,23 @@ export interface ZohoTokenResponse {
  * 
  * @returns {Promise<string>} The valid access_token.
  */
-export async function getValidAccessToken(): Promise<string> {
+export async function getValidAccessToken(forceRefresh = false): Promise<string> {
   const supabase = createServiceRoleSupabaseClient();
   const tokenKey = 'zoho_mdm_token';
 
-  // 1. Try to fetch existing token from Supabase
-  const { data: existingSetting, error: fetchError } = await supabase
-    .from('system_settings')
-    .select('value, expires_at')
-    .eq('key', tokenKey)
-    .single();
+  if (!forceRefresh) {
+    // 1. Try to fetch existing token from Supabase
+    const { data: existingSetting, error: fetchError } = await supabase
+      .from('system_settings')
+      .select('value, expires_at')
+      .eq('key', tokenKey)
+      .single();
 
-  if (!fetchError && existingSetting && existingSetting.expires_at) {
-    const expiryTime = new Date(existingSetting.expires_at).getTime();
-    if (Date.now() < expiryTime) {
-      return existingSetting.value;
+    if (!fetchError && existingSetting && existingSetting.expires_at) {
+      const expiryTime = new Date(existingSetting.expires_at).getTime();
+      if (Date.now() < expiryTime) {
+        return existingSetting.value;
+      }
     }
   }
 
@@ -63,7 +65,9 @@ export async function getValidAccessToken(): Promise<string> {
     refresh_token: refreshToken,
   });
 
-  const response = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+  const accountsUrl = process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.com';
+
+  const response = await fetch(`${accountsUrl}/oauth/v2/token`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -99,6 +103,30 @@ export async function getValidAccessToken(): Promise<string> {
 }
 
 /**
+ * Helper to fetch from ManageEngine with auto token-refresh on 401
+ */
+async function manageEngineFetch(url: string, options: any = {}, retry = true): Promise<Response> {
+  // If retry is false, we are retrying after a 401, so we FORCE a fresh token
+  const accessToken = await getValidAccessToken(!retry);
+  
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Authorization': `Zoho-oauthtoken ${accessToken}`
+    }
+  });
+
+  // If 401 Unauthorized and we haven't retried yet, force a token refresh and retry
+  if (response.status === 401 && retry) {
+    console.warn(`[manageEngineFetch] 401 Unauthorized for ${url}. Force refreshing token and retrying...`);
+    return manageEngineFetch(url, options, false);
+  }
+
+  return response;
+}
+
+/**
  * Example wrapper utility demonstrating how to make an authenticated call 
  * to the ManageEngine Cloud endpoint.
  * 
@@ -111,20 +139,13 @@ export async function getValidAccessToken(): Promise<string> {
  */
 export async function fetchManageEngineDevices(): Promise<any> {
   try {
-    // 1. Fetch a fresh token using the rotator code
-    const accessToken = await getValidAccessToken();
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/devices`;
 
-    // 2. Define the ManageEngine API endpoint
-    // Note: The base URL might be different based on your Zoho DC (e.g., .com, .eu, .in)
-    const url = 'https://mdm.manageengine.com/api/v1/mdm/devices';
-
-    // 3. Construct the fetch request explicitly including the Zoho header syntax
-    const response = await fetch(url, {
+    const response = await manageEngineFetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        // Data flows directly from the retrieved token straight to this request header
-        'Authorization': `Zoho-oauthtoken ${accessToken}`
       }
     });
 
@@ -148,14 +169,13 @@ export async function fetchManageEngineDevices(): Promise<any> {
  */
 export async function getDeviceLocation(deviceId: string): Promise<any> {
   try {
-    const accessToken = await getValidAccessToken();
-    const url = `https://mdm.manageengine.com/api/v1/mdm/devices/${deviceId}/locations`;
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/devices/${deviceId}/locations`;
     
-    const response = await fetch(url, {
+    const response = await manageEngineFetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Zoho-oauthtoken ${accessToken}`
       }
     });
 
@@ -177,15 +197,14 @@ export async function getDeviceLocation(deviceId: string): Promise<any> {
  */
 export async function getDeviceLocationWithAddress(deviceId: string): Promise<any> {
   try {
-    const accessToken = await getValidAccessToken();
-    const url = `https://mdm.manageengine.com/api/v1/mdm/devices/${deviceId}/locations`;
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/devices/${deviceId}/locations`;
     
-    const response = await fetch(url, {
+    const response = await manageEngineFetch(url, {
       method: 'GET',
       cache: 'no-store',
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Zoho-oauthtoken ${accessToken}`
       }
     });
 
@@ -211,13 +230,12 @@ export async function getDeviceLocationWithAddress(deviceId: string): Promise<an
  */
 export async function getAllDeviceLocations(): Promise<any> {
   try {
-    const accessToken = await getValidAccessToken();
-    const url = `https://mdm.manageengine.com/api/v1/mdm/devices/locations`;
-    const response = await fetch(url, {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/devices/locations`;
+    const response = await manageEngineFetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/vnd.manageengine.mdm.v1+json',
-        'Authorization': `Zoho-oauthtoken ${accessToken}`
       }
     });
     
@@ -243,13 +261,12 @@ export async function getAllDeviceLocations(): Promise<any> {
  */
 export async function getDeviceApps(deviceId: string): Promise<any> {
   try {
-    const accessToken = await getValidAccessToken();
-    const url = `https://mdm.manageengine.com/api/v1/mdm/devices/${deviceId}/apps`;
-    const response = await fetch(url, {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/devices/${deviceId}/apps`;
+    const response = await manageEngineFetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Zoho-oauthtoken ${accessToken}`
       }
     });
     if (!response.ok) throw new Error(await response.text());
@@ -266,14 +283,13 @@ export async function getDeviceApps(deviceId: string): Promise<any> {
  */
 export async function associateDeviceApps(deviceId: string, appIds: string[]): Promise<any> {
   try {
-    const accessToken = await getValidAccessToken();
-    const url = `https://mdm.manageengine.com/api/v1/mdm/devices/${deviceId}/apps`;
-    const response = await fetch(url, {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/devices/${deviceId}/apps`;
+    const response = await manageEngineFetch(url, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'Authorization': `Zoho-oauthtoken ${accessToken}`
       },
       body: JSON.stringify({
         app_ids: appIds,
@@ -295,14 +311,13 @@ export async function associateDeviceApps(deviceId: string, appIds: string[]): P
  */
 export async function requestDeviceLocationUpdate(deviceId: string): Promise<any> {
   try {
-    const accessToken = await getValidAccessToken();
-    const url = `https://mdm.manageengine.com/api/v1/mdm/devices/${deviceId}/locations_with_address`;
-    const response = await fetch(url, {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/devices/${deviceId}/locations_with_address`;
+    const response = await manageEngineFetch(url, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'Authorization': `Zoho-oauthtoken ${accessToken}`
       }
     });
     if (!response.ok) {
@@ -327,13 +342,12 @@ export async function requestDeviceLocationUpdate(deviceId: string): Promise<any
  */
 export async function getDeviceRestrictions(deviceId: string): Promise<any> {
   try {
-    const accessToken = await getValidAccessToken();
-    const url = `https://mdm.manageengine.com/api/v1/mdm/devices/${deviceId}/restrictions`;
-    const response = await fetch(url, {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/devices/${deviceId}/restrictions`;
+    const response = await manageEngineFetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Zoho-oauthtoken ${accessToken}`
       }
     });
     if (!response.ok) throw new Error(await response.text());
@@ -350,13 +364,12 @@ export async function getDeviceRestrictions(deviceId: string): Promise<any> {
  */
 export async function getDeviceCertificates(deviceId: string): Promise<any> {
   try {
-    const accessToken = await getValidAccessToken();
-    const url = `https://mdm.manageengine.com/api/v1/mdm/devices/${deviceId}/certificates`;
-    const response = await fetch(url, {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/devices/${deviceId}/certificates`;
+    const response = await manageEngineFetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Zoho-oauthtoken ${accessToken}`
       }
     });
     if (!response.ok) throw new Error(await response.text());
@@ -373,13 +386,12 @@ export async function getDeviceCertificates(deviceId: string): Promise<any> {
  */
 export async function getDeviceFileVault(deviceId: string): Promise<any> {
   try {
-    const accessToken = await getValidAccessToken();
-    const url = `https://mdm.manageengine.com/api/v1/mdm/devices/${deviceId}/filevault`;
-    const response = await fetch(url, {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/devices/${deviceId}/filevault`;
+    const response = await manageEngineFetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Zoho-oauthtoken ${accessToken}`
       }
     });
     if (!response.ok) throw new Error(await response.text());
@@ -396,13 +408,12 @@ export async function getDeviceFileVault(deviceId: string): Promise<any> {
  */
 export async function getDeviceAlerts(deviceId: string): Promise<any> {
   try {
-    const accessToken = await getValidAccessToken();
-    const url = `https://mdm.manageengine.com/api/v1/mdm/devices/${deviceId}/alerts`;
-    const response = await fetch(url, {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/devices/${deviceId}/alerts`;
+    const response = await manageEngineFetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'Authorization': `Zoho-oauthtoken ${accessToken}`
       }
     });
     if (!response.ok) {
@@ -424,20 +435,19 @@ export async function getDeviceAlerts(deviceId: string): Promise<any> {
  */
 export async function sendDeviceCommand(deviceId: string, commandName: string, commandData: any = {}): Promise<any> {
   try {
-    const accessToken = await getValidAccessToken();
-    const url = `https://mdm.manageengine.com/api/v1/mdm/devices/${deviceId}/actions/${commandName}`;
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/devices/${deviceId}/actions/${commandName}`;
     
     // The ManageEngine endpoint for single device action takes fields directly in the body
     const payload = {
       ...commandData
     };
 
-    const response = await fetch(url, {
+    const response = await manageEngineFetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Authorization': `Zoho-oauthtoken ${accessToken}`
       },
       body: JSON.stringify(payload)
     });

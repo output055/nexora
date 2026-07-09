@@ -95,15 +95,18 @@ on conflict (id) do nothing;
 
 -- ── Payments ──────────────────────────────────────────────────────────────────
 create table if not exists public.payments (
-  id              uuid primary key default uuid_generate_v4(),
-  customer_id     uuid not null references public.customers(id) on delete restrict,
-  collector_id    uuid not null references auth.users(id),
-  amount_paid     numeric(12, 2) not null check (amount_paid > 0),
-  collection_date date not null default current_date,
-  created_at      timestamptz not null default now()
+  id                    uuid primary key default uuid_generate_v4(),
+  customer_id           uuid not null references public.customers(id) on delete restrict,
+  device_id             uuid references public.devices(id) on delete restrict,
+  collector_id          uuid references auth.users(id),
+  amount_paid           numeric(12, 2) not null check (amount_paid > 0),
+  payment_method        text not null default 'cash' check (payment_method in ('cash', 'paystack_momo', 'bank_transfer')),
+  transaction_reference text,
+  collection_date       date not null default current_date,
+  created_at            timestamptz not null default now()
 );
 
-comment on table public.payments is 'Cash payment entries logged by field agents';
+comment on table public.payments is 'Payment entries logged manually or via Paystack';
 
 -- ── Audit Logs ────────────────────────────────────────────────────────────────
 create table if not exists public.audit_logs (
@@ -208,6 +211,24 @@ create trigger devices_updated_at
   before update on public.devices
   for each row execute function public.update_updated_at();
 
+-- ── Trigger: update device balance on payment ───────────────────────────────────
+create or replace function public.update_device_balance_on_payment()
+returns trigger language plpgsql as $$
+begin
+  if new.device_id is not null then
+    update public.devices
+    set remaining_balance = greatest(remaining_balance - new.amount_paid, 0)
+    where id = new.device_id;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists payments_update_device_balance on public.payments;
+create trigger payments_update_device_balance
+  after insert on public.payments
+  for each row execute function public.update_device_balance_on_payment();
+
 -- ── Seed Data ─────────────────────────────────────────────────────────────────
 -- Default Permissions
 insert into public.permissions (name, description) values
@@ -219,7 +240,8 @@ insert into public.permissions (name, description) values
   ('manage_devices',     'Register devices and manage onboarding workflows'),
   ('manage_roles',       'Create and modify roles and permission assignments'),
   ('view_audit_logs',    'Access the system-wide audit log stream'),
-  ('view_customers',     'View customer account records')
+  ('view_customers',     'View customer account records'),
+  ('view_settings',      'View and modify global system settings')
 on conflict (name) do nothing;
 
 -- Default Roles
@@ -242,7 +264,7 @@ insert into public.role_permissions (role_id, permission_id)
 select r.id, p.id
 from public.roles r, public.permissions p
 where r.name = 'admin'
-  and p.name in ('view_analytics', 'force_lock_device', 'unlock_device', 'manage_customers', 'manage_devices', 'view_audit_logs', 'view_customers')
+  and p.name in ('view_analytics', 'force_lock_device', 'unlock_device', 'manage_customers', 'manage_devices', 'view_audit_logs', 'view_customers', 'view_settings')
 on conflict do nothing;
 
 -- Shop manager permissions

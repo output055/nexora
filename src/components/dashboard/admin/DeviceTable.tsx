@@ -3,12 +3,13 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { Search, Lock, Unlock, Loader2, Apple, Smartphone, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { Search, Lock, Unlock, Loader2, Apple, Smartphone, ChevronUp, ChevronDown, X, Banknote } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Customer } from '@/types';
 import type { DeviceWithCustomer } from '@/app/dashboard/admin/devices/page';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { PaginationBar } from './PaginationBar';
+import LogPaymentForm from '@/components/dashboard/payments/LogPaymentForm';
 
 interface DeviceTableProps {
   devices: DeviceWithCustomer[];
@@ -26,6 +27,7 @@ export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
   const [filterLock, setFilterLock] = useState<LockFilter>('all');
   const [sortKey, setSortKey] = useState<SortKey>('device_model');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [selectedDeviceForPayment, setSelectedDeviceForPayment] = useState<DeviceWithCustomer | null>(null);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
@@ -229,13 +231,24 @@ export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
                       </span>
                     </td>
                     <td className="px-4 py-3.5">
-                      <Link
-                        href={`/dashboard/admin/mdm?deviceId=${d.mdm_device_id}`}
-                        className="inline-flex min-w-[92px] items-center justify-center gap-1.5 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-400 transition-all hover:bg-blue-500/20"
-                      >
-                        <Smartphone size={12} />
-                        Manage
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/dashboard/admin/mdm?deviceId=${d.mdm_device_id}`}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-400 transition-all hover:bg-blue-500/20"
+                        >
+                          <Smartphone size={12} />
+                          Manage
+                        </Link>
+                        {d.remaining_balance > 0 && (
+                          <button
+                            onClick={() => setSelectedDeviceForPayment(d)}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-purple-500/20 bg-purple-500/10 px-3 py-1.5 text-xs font-semibold text-purple-400 transition-all hover:bg-purple-500/20"
+                          >
+                            <Banknote size={12} />
+                            Pay
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </motion.tr>
                 );
@@ -269,6 +282,33 @@ export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
         onPageSizeChange={pagination.setPageSize}
         itemLabel="devices"
       />
+
+      {/* Payment Modal */}
+      <AnimatePresence>
+        {selectedDeviceForPayment && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative"
+            >
+              <button
+                onClick={() => setSelectedDeviceForPayment(null)}
+                className="absolute -top-4 -right-4 p-2 bg-gray-800 rounded-full text-gray-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+              <LogPaymentForm
+                customerId={selectedDeviceForPayment.customer_id}
+                deviceId={selectedDeviceForPayment.id}
+                remainingBalance={Number(selectedDeviceForPayment.remaining_balance) || 0}
+                customerEmail="customer@nexora.test" // Mock email for Paystack demo
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
