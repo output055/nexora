@@ -13,6 +13,8 @@
  * Ensure these are requested when initially generating the `ZOHO_REFRESH_TOKEN`.
  */
 
+import { createServiceRoleSupabaseClient } from './supabase';
+
 export interface ZohoTokenResponse {
   access_token: string;
   expires_in: number;
@@ -22,11 +24,30 @@ export interface ZohoTokenResponse {
 
 /**
  * Fetches a fresh OAuth access token from Zoho using the configured refresh token.
- * This shares the underlying rotator logic used by the API route.
+ * Caches the token in Supabase to prevent rate-limiting from Zoho's auth endpoint
+ * across multiple serverless instances.
  * 
- * @returns {Promise<string>} The new valid access_token.
+ * @returns {Promise<string>} The valid access_token.
  */
 export async function getValidAccessToken(): Promise<string> {
+  const supabase = createServiceRoleSupabaseClient();
+  const tokenKey = 'zoho_mdm_token';
+
+  // 1. Try to fetch existing token from Supabase
+  const { data: existingSetting, error: fetchError } = await supabase
+    .from('system_settings')
+    .select('value, expires_at')
+    .eq('key', tokenKey)
+    .single();
+
+  if (!fetchError && existingSetting && existingSetting.expires_at) {
+    const expiryTime = new Date(existingSetting.expires_at).getTime();
+    if (Date.now() < expiryTime) {
+      return existingSetting.value;
+    }
+  }
+
+  // 2. Token is missing or expired, fetch a new one
   const clientId = process.env.CLIENT_ID;
   const clientSecret = process.env.CLIENT_SECRET;
   const refreshToken = process.env.ZOHO_REFRESH_TOKEN;
@@ -61,7 +82,20 @@ export async function getValidAccessToken(): Promise<string> {
     throw new Error(`Zoho OAuth Error: ${data.error} - ${data.error_description || ''}`);
   }
 
-  return data.access_token;
+  const newToken = data.access_token;
+  // expires_in is typically in seconds. We buffer by 1 minute (60000 ms)
+  const newExpiryTime = new Date(Date.now() + (data.expires_in * 1000) - 60000).toISOString();
+
+  // 3. Upsert the new token into Supabase
+  await supabase
+    .from('system_settings')
+    .upsert({ 
+      key: tokenKey, 
+      value: newToken, 
+      expires_at: newExpiryTime 
+    }, { onConflict: 'key' });
+
+  return newToken;
 }
 
 /**
@@ -148,6 +182,7 @@ export async function getDeviceLocationWithAddress(deviceId: string): Promise<an
     
     const response = await fetch(url, {
       method: 'GET',
+      cache: 'no-store',
       headers: {
         'Accept': 'application/json',
         'Authorization': `Zoho-oauthtoken ${accessToken}`
@@ -351,6 +386,75 @@ export async function getDeviceFileVault(deviceId: string): Promise<any> {
     return await response.json();
   } catch (error) {
     console.error(`Error fetching FileVault details for device ${deviceId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Get device alerts
+ * GET /api/v1/mdm/devices/{device_id}/alerts
+ */
+export async function getDeviceAlerts(deviceId: string): Promise<any> {
+  try {
+    const accessToken = await getValidAccessToken();
+    const url = `https://mdm.manageengine.com/api/v1/mdm/devices/${deviceId}/alerts`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Zoho-oauthtoken ${accessToken}`
+      }
+    });
+    if (!response.ok) {
+      if (response.status === 404 || response.status === 405) {
+        return { alerts: [] }; // Fallback if endpoint not supported for tier
+      }
+      throw new Error(await response.text());
+    }
+    return await response.json();
+  } catch (error) {
+    console.error(`Error fetching alerts for device ${deviceId}:`, error);
+    return { alerts: [] };
+  }
+}
+
+/**
+ * Send a remote command to a device
+ * POST /api/v1/mdm/actions/{command_name}
+ */
+export async function sendDeviceCommand(deviceId: string, commandName: string, commandData: any = {}): Promise<any> {
+  try {
+    const accessToken = await getValidAccessToken();
+    const url = `https://mdm.manageengine.com/api/v1/mdm/devices/${deviceId}/actions/${commandName}`;
+    
+    // The ManageEngine endpoint for single device action takes fields directly in the body
+    const payload = {
+      ...commandData
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Zoho-oauthtoken ${accessToken}`
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      throw new Error(await response.text());
+    }
+    
+    // ManageEngine often returns 202 Accepted with no body for commands
+    if (response.status === 202 || response.status === 204) {
+      return { status: 'success', message: 'Command accepted' };
+    }
+
+    const text = await response.text();
+    return text ? JSON.parse(text) : { status: 'success' };
+  } catch (error) {
+    console.error(`Error sending command ${commandName} to device ${deviceId}:`, error);
     throw error;
   }
 }

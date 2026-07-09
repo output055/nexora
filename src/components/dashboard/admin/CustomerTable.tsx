@@ -248,7 +248,7 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                   </td>
                   <td className="px-4 py-3.5">
                     <p className="text-sm text-slate-300">{c.device_model}</p>
-                    <p className="text-xs text-slate-600 mt-0.5">ID: {c.miradore_device_id}</p>
+                    <p className="text-xs text-slate-600 mt-0.5">ID: {c.mdm_device_id}</p>
                   </td>
                   <td className="px-4 py-3.5">
                     <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold ${

@@ -43,7 +43,7 @@ export function DeviceTable({ customers, onCustomerUpdate }: DeviceTableProps) {
           !q ||
           c.full_name.toLowerCase().includes(q) ||
           c.device_model.toLowerCase().includes(q) ||
-          c.miradore_device_id.toLowerCase().includes(q) ||
+          c.mdm_device_id.toLowerCase().includes(q) ||
           c.phone_number.includes(q);
         const matchPlatform = filterPlatform === 'all' || c.os_platform === filterPlatform;
         const matchLock =
@@ -71,10 +71,10 @@ export function DeviceTable({ customers, onCustomerUpdate }: DeviceTableProps) {
   };
 
   const openManageModal = (customerId: string, deviceName: string, model: string) => {
-    // Note: We use miradore_device_id which stores the Scalefusion ID
+    // Note: We use mdm_device_id which stores the Scalefusion ID
     const customer = customers.find(c => c.id === customerId);
     if (!customer) return;
-    setManageDeviceId(customer.miradore_device_id);
+    setManageDeviceId(customer.mdm_device_id);
     setManageDeviceName(`${deviceName} (${model})`);
   };
 
@@ -212,7 +212,7 @@ export function DeviceTable({ customers, onCustomerUpdate }: DeviceTableProps) {
                   >
                     <td className="px-4 py-3.5">
                       <p className="text-sm font-semibold text-white">{c.device_model}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">ID: {c.miradore_device_id}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">ID: {c.mdm_device_id}</p>
                     </td>
                     <td className="px-4 py-3.5">
                       <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold ${

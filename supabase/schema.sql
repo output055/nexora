@@ -62,7 +62,7 @@ create table if not exists public.customers (
   payment_cycle       text check (payment_cycle in ('daily', 'weekly', 'bi_weekly')),
   os_platform         text not null check (os_platform in ('iOS', 'Android')),
   device_model        text not null,
-  miradore_device_id  text not null,
+  mdm_device_id  text not null,
   total_owed          numeric(12, 2) not null default 0,
   remaining_balance   numeric(12, 2) not null default 0,
   payment_status      text not null default 'current' check (payment_status in ('current', 'overdue')),
@@ -91,7 +91,7 @@ using (
     select
       ctid,
       row_number() over (
-        partition by miradore_device_id
+        partition by mdm_device_id
         order by created_at desc, id desc
       ) as duplicate_rank
     from public.customers
@@ -118,7 +118,7 @@ using (
 where c.ctid = duplicate.ctid;
 
 create unique index if not exists idx_customers_ghana_card_id on public.customers(ghana_card_id) where ghana_card_id is not null;
-create unique index if not exists idx_customers_miradore_device_id on public.customers(miradore_device_id);
+create unique index if not exists idx_customers_mdm_device_id on public.customers(mdm_device_id);
 
 insert into storage.buckets (id, name, public)
 values ('ghana-card-scans', 'ghana-card-scans', false)

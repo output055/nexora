@@ -54,7 +54,7 @@ type RegisterForm = {
   place_of_work: string;
   payment_cycle: PaymentCycle | '';
   device_model: string;
-  miradore_device_id: string;
+  mdm_device_id: string;
   total_owed: string;
 };
 
@@ -92,7 +92,7 @@ const emptyForm: RegisterForm = {
   place_of_work: '',
   payment_cycle: '',
   device_model: '',
-  miradore_device_id: '',
+  mdm_device_id: '',
   total_owed: '',
 };
 
@@ -258,7 +258,7 @@ export default function DeviceOnboardingPage() {
     formData.set('payment_cycle', form.payment_cycle);
     formData.set('os_platform', platform);
     formData.set('device_model', form.device_model);
-    formData.set('miradore_device_id', form.miradore_device_id);
+    formData.set('mdm_device_id', form.mdm_device_id);
     formData.set('total_owed', form.total_owed);
     if (form.ghana_card_scan) formData.set('ghana_card_scan', form.ghana_card_scan);
 
@@ -319,7 +319,7 @@ export default function DeviceOnboardingPage() {
     setter((prev) => ({
       ...prev,
       device_model: device?.model ?? '',
-      miradore_device_id: device?.id ?? '',
+      mdm_device_id: device?.id ?? '',
     }));
   };
 
@@ -718,7 +718,7 @@ function DeviceStep({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Input id={`${workflow}-model`} label="Device Model" value={form.device_model} onChange={(value) => onChange('device_model', value)} disabled={Boolean(selectedDevice)} required />
-        <Input id={`${workflow}-device-id`} label="Scalefusion Device ID" value={form.miradore_device_id} onChange={(value) => onChange('miradore_device_id', value)} disabled={Boolean(selectedDevice)} required />
+        <Input id={`${workflow}-device-id`} label="Scalefusion Device ID" value={form.mdm_device_id} onChange={(value) => onChange('mdm_device_id', value)} disabled={Boolean(selectedDevice)} required />
         <Input id={`${workflow}-total`} label="Total Financed Amount" type="number" min="1" step="1" value={form.total_owed} onChange={(value) => onChange('total_owed', value)} required />
       </div>
     </div>

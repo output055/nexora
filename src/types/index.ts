@@ -56,7 +56,7 @@ export interface Customer {
   payment_cycle?: PaymentCycle;
   os_platform: OsPlatform;
   device_model: string;
-  miradore_device_id: string;
+  mdm_device_id: string;
   total_owed: number;
   remaining_balance: number;
   payment_status: PaymentStatus;

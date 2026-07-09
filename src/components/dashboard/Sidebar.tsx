@@ -50,7 +50,7 @@ const adminNavItems: NavItem[] = [
     permission: 'manage_devices',
   },
   {
-    label: 'MDM Map & Audit',
+    label: 'Enrolled devices',
     href: '/dashboard/admin/mdm',
     icon: <Map size={18} />,
     permission: 'manage_devices',

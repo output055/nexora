@@ -9,7 +9,9 @@ import {
   getDeviceCertificates,
   getDeviceFileVault,
   fetchManageEngineDevices,
-  getDeviceLocationWithAddress
+  getDeviceLocationWithAddress,
+  getDeviceAlerts,
+  sendDeviceCommand
 } from '@/lib/manageengine';
 
 /**
@@ -105,6 +107,31 @@ export async function getDeviceSecurityAction(deviceId: string) {
       } 
     };
   } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get alerts for a specific device
+ */
+export async function getDeviceAlertsAction(deviceId: string) {
+  try {
+    const data = await getDeviceAlerts(deviceId);
+    return { success: true, data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Execute a remote command on a specific device
+ */
+export async function executeDeviceCommandAction(deviceId: string, commandName: string, commandData: any = {}) {
+  try {
+    const data = await sendDeviceCommand(deviceId, commandName, commandData);
+    return { success: true, data };
+  } catch (error: any) {
+    console.error(`Action error sending command ${commandName}:`, error);
     return { success: false, error: error.message };
   }
 }

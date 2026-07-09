@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
     };
 
     if (newBalance === 0) {
-      const mirResult = await unlockDevice(currentCustomer.miradore_device_id);
+      const mirResult = await unlockDevice(currentCustomer.mdm_device_id);
       unlockResult = {
         attempted: true,
         success: mirResult.success,
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
       await supabase.from('audit_logs').insert({
         actor_name: 'System (auto)',
         action_description: mirResult.success
-          ? `AUTO UNLOCK triggered for device ${currentCustomer.miradore_device_id} (${currentCustomer.full_name}) - balance cleared`
+          ? `AUTO UNLOCK triggered for device ${currentCustomer.mdm_device_id} (${currentCustomer.full_name}) - balance cleared`
           : `AUTO UNLOCK FAILED for ${currentCustomer.full_name} (${currentCustomer.os_platform}) - ${mirResult.message ?? 'MDM unlock command failed'}`,
       });
     }

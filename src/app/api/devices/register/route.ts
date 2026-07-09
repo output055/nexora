@@ -19,7 +19,7 @@ type RegisterDevicePayload = {
   payment_cycle: PaymentCycle;
   os_platform: OsPlatform;
   device_model: string;
-  miradore_device_id: string;
+  mdm_device_id: string;
   total_owed: number;
   ghana_card_scan: File;
 };
@@ -51,13 +51,13 @@ function parseRegisterPayload(formData: FormData):
     payment_cycle: cleanString(formData, 'payment_cycle'),
     os_platform: cleanString(formData, 'os_platform'),
     device_model: cleanString(formData, 'device_model'),
-    miradore_device_id: cleanString(formData, 'miradore_device_id'),
+    mdm_device_id: cleanString(formData, 'mdm_device_id'),
     total_owed: Number(cleanString(formData, 'total_owed')),
     ghana_card_scan: formData.get('ghana_card_scan'),
   };
 
   if (!payload.device_model) return { error: 'Device model is required.' };
-  if (!payload.miradore_device_id) return { error: 'Miradore device id, serial, or IMEI is required.' };
+  if (!payload.mdm_device_id) return { error: 'Miradore device id, serial, or IMEI is required.' };
   if (!['iOS', 'Android'].includes(payload.os_platform)) return { error: 'os_platform must be iOS or Android.' };
   if (!Number.isFinite(payload.total_owed) || payload.total_owed <= 0) return { error: 'Total financed amount must be a positive number.' };
 
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
     const { data: existingDevice } = await admin
       .from('customers')
       .select('id')
-      .eq('miradore_device_id', payload.miradore_device_id)
+      .eq('mdm_device_id', payload.mdm_device_id)
       .maybeSingle();
 
     if (existingDevice) {
@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'This Ghana Card ID is already registered.' }, { status: 409 });
     }
 
-    const scanPath = `${payload.ghana_card_id}/${Date.now()}-${payload.miradore_device_id}.${getScanExtension(payload.ghana_card_scan)}`;
+    const scanPath = `${payload.ghana_card_id}/${Date.now()}-${payload.mdm_device_id}.${getScanExtension(payload.ghana_card_scan)}`;
     const { error: uploadError } = await admin.storage
       .from('ghana-card-scans')
       .upload(scanPath, payload.ghana_card_scan, {
@@ -172,7 +172,7 @@ export async function POST(request: NextRequest) {
         payment_cycle: payload.payment_cycle,
         os_platform: payload.os_platform,
         device_model: payload.device_model,
-        miradore_device_id: payload.miradore_device_id,
+        mdm_device_id: payload.mdm_device_id,
         total_owed: payload.total_owed,
         remaining_balance: payload.total_owed,
         payment_status: 'current',
@@ -190,7 +190,7 @@ export async function POST(request: NextRequest) {
 
     const { error: auditError } = await admin.from('audit_logs').insert({
       actor_name: user.email ?? 'Unknown',
-      action_description: `Admin registered new ${payload.os_platform} device ${payload.miradore_device_id} to customer ${payload.full_name} (${payload.ghana_card_id})`,
+      action_description: `Admin registered new ${payload.os_platform} device ${payload.mdm_device_id} to customer ${payload.full_name} (${payload.ghana_card_id})`,
     });
 
     if (auditError) {
@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
     let miradoreSync = { attempted: false, success: false, error: undefined as string | undefined };
 
     if (payload.os_platform === 'iOS') {
-      const result = await updateDeviceAssetOwner(payload.miradore_device_id, payload.full_name);
+      const result = await updateDeviceAssetOwner(payload.mdm_device_id, payload.full_name);
       miradoreSync = {
         attempted: true,
         success: result.success,
@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
       if (!result.success) {
         await admin.from('audit_logs').insert({
           actor_name: 'System (auto)',
-          action_description: `Miradore asset sync failed for ${payload.miradore_device_id} (${payload.full_name}) - ${result.message ?? 'unknown error'}`,
+          action_description: `Miradore asset sync failed for ${payload.mdm_device_id} (${payload.full_name}) - ${result.message ?? 'unknown error'}`,
         });
       }
     }
