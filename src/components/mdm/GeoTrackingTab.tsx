@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { RefreshCw, Smartphone, MapPin, Trash2, ChevronUp } from 'lucide-react';
+import { RefreshCw, Smartphone, MapPin, Trash2, ChevronUp, Loader2 } from 'lucide-react';
 import { getDeviceLocationAction, requestDeviceLocationUpdateAction } from '@/app/actions/devices';
 import { toast } from 'sonner';
 import dynamic from 'next/dynamic';
@@ -10,9 +10,9 @@ const LeafletMap = dynamic(() => import('./LeafletMap'), {
   ssr: false,
   loading: () => (
     <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-[#0D1526] text-slate-400">
-      <div className="animate-pulse flex flex-col items-center">
-        <MapPin size={32} className="mb-2 text-blue-500/50" />
-        <span>Loading map...</span>
+      <div className="flex flex-col items-center gap-3">
+        <Loader2 size={32} className="text-blue-500/50 animate-spin" />
+        <span className="animate-pulse">Loading map...</span>
       </div>
     </div>
   )

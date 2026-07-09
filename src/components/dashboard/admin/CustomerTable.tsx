@@ -4,12 +4,13 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Apple, Smartphone, ChevronUp, ChevronDown, X } from 'lucide-react';
 import type { Customer } from '@/types';
+import type { CustomerWithDevices } from '@/app/dashboard/admin/customers/page';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { PaginationBar } from './PaginationBar';
 
 interface CustomerTableProps {
-  customers: Customer[];
-  onCustomerUpdate?: (customerId: string, updates: Partial<Customer>) => void;
+  customers: CustomerWithDevices[];
+  onCustomerUpdate?: (customerId: string, updates: Partial<CustomerWithDevices>) => void;
 }
 
 type SortKey = 'full_name' | 'remaining_balance' | 'payment_status' | 'created_at';
@@ -34,33 +35,41 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
   const filtered = useMemo(() =>
     [...customers]
       .filter((c) => {
+        const primaryDevice = c.devices?.[0];
         const q = search.toLowerCase();
         const matchSearch =
           !q ||
           c.full_name.toLowerCase().includes(q) ||
           c.phone_number.includes(q) ||
-          c.device_model.toLowerCase().includes(q) ||
+          (primaryDevice?.device_model || '').toLowerCase().includes(q) ||
           (c.ghana_card_id ?? '').toLowerCase().includes(q);
-        const matchStatus = filterStatus === 'all' || c.payment_status === filterStatus;
-        const matchPlatform = filterPlatform === 'all' || c.os_platform === filterPlatform;
+        const matchStatus = filterStatus === 'all' || primaryDevice?.payment_status === filterStatus;
+        const matchPlatform = filterPlatform === 'all' || primaryDevice?.os_platform === filterPlatform;
         const matchCycle = filterCycle === 'all' || c.payment_cycle === filterCycle;
         return matchSearch && matchStatus && matchPlatform && matchCycle;
       })
       .sort((a, b) => {
+        const aDevice = a.devices?.[0];
+        const bDevice = b.devices?.[0];
+        
         if (sortKey === 'full_name') {
           return sortDir === 'asc'
             ? a.full_name.localeCompare(b.full_name)
             : b.full_name.localeCompare(a.full_name);
         }
         if (sortKey === 'remaining_balance') {
+          const aBal = aDevice?.remaining_balance || 0;
+          const bBal = bDevice?.remaining_balance || 0;
           return sortDir === 'asc'
-            ? a.remaining_balance - b.remaining_balance
-            : b.remaining_balance - a.remaining_balance;
+            ? aBal - bBal
+            : bBal - aBal;
         }
         if (sortKey === 'payment_status') {
+          const aStat = aDevice?.payment_status || '';
+          const bStat = bDevice?.payment_status || '';
           return sortDir === 'asc'
-            ? a.payment_status.localeCompare(b.payment_status)
-            : b.payment_status.localeCompare(a.payment_status);
+            ? aStat.localeCompare(bStat)
+            : bStat.localeCompare(aStat);
         }
         if (sortKey === 'created_at') {
           const aDate = new Date(a.created_at).getTime();
@@ -231,7 +240,9 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
           </thead>
           <tbody>
             <AnimatePresence>
-              {pagination.paginated.map((c, i) => (
+              {pagination.paginated.map((c, i) => {
+                const primaryDevice = c.devices?.[0];
+                return (
                 <motion.tr
                   key={c.id}
                   initial={{ opacity: 0 }}
@@ -247,18 +258,24 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                     </div>
                   </td>
                   <td className="px-4 py-3.5">
-                    <p className="text-sm text-slate-300">{c.device_model}</p>
-                    <p className="text-xs text-slate-600 mt-0.5">ID: {c.mdm_device_id}</p>
+                    <p className="text-sm text-slate-300">{primaryDevice?.device_model || 'No device'}</p>
+                    {primaryDevice?.mdm_device_id && (
+                      <p className="text-xs text-slate-600 mt-0.5">ID: {primaryDevice.mdm_device_id}</p>
+                    )}
                   </td>
                   <td className="px-4 py-3.5">
-                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold ${
-                      c.os_platform === 'iOS'
-                        ? 'bg-slate-700/60 text-slate-300'
-                        : 'bg-emerald-500/10 text-emerald-400'
-                    }`}>
-                      {c.os_platform === 'iOS' ? <Apple size={12} /> : <Smartphone size={12} />}
-                      {c.os_platform}
-                    </div>
+                    {primaryDevice?.os_platform ? (
+                      <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold ${
+                        primaryDevice.os_platform === 'iOS'
+                          ? 'bg-slate-700/60 text-slate-300'
+                          : 'bg-emerald-500/10 text-emerald-400'
+                      }`}>
+                        {primaryDevice.os_platform === 'iOS' ? <Apple size={12} /> : <Smartphone size={12} />}
+                        {primaryDevice.os_platform}
+                      </div>
+                    ) : (
+                      <span className="text-slate-500">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3.5">
                     <span className="text-xs text-slate-400 capitalize">
@@ -267,22 +284,22 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                   </td>
                   <td className="px-4 py-3.5">
                     <p className={`text-sm font-bold tabular-nums ${
-                      (c.remaining_balance || 0) > 0 ? 'text-white' : 'text-emerald-400'
+                      (primaryDevice?.remaining_balance || 0) > 0 ? 'text-white' : 'text-emerald-400'
                     }`}>
-                      {(c.remaining_balance || 0) === 0 ? 'Paid ✓' : `GH₵${(c.remaining_balance || 0).toLocaleString()}`}
+                      {(primaryDevice?.remaining_balance || 0) === 0 ? 'Paid ✓' : `GH₵${(primaryDevice?.remaining_balance || 0).toLocaleString()}`}
                     </p>
-                    <p className="text-xs text-slate-600 mt-0.5">of GH₵{(c.total_owed || 0).toLocaleString()}</p>
+                    <p className="text-xs text-slate-600 mt-0.5">of GH₵{(primaryDevice?.total_owed || 0).toLocaleString()}</p>
                   </td>
                   <td className="px-4 py-3.5">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                      c.payment_status === 'overdue'
+                      primaryDevice?.payment_status === 'overdue'
                         ? 'bg-red-500/15 text-red-400 border border-red-500/20'
                         : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
                     }`}>
                       <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
-                        c.payment_status === 'overdue' ? 'bg-red-400' : 'bg-emerald-400'
+                        primaryDevice?.payment_status === 'overdue' ? 'bg-red-400' : 'bg-emerald-400'
                       }`} />
-                      {c.payment_status === 'overdue' ? 'Overdue' : 'Current'}
+                      {primaryDevice?.payment_status === 'overdue' ? 'Overdue' : 'Current'}
                     </span>
                   </td>
                   <td className="px-4 py-3.5">
@@ -293,7 +310,7 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                     </p>
                   </td>
                 </motion.tr>
-              ))}
+              )})}
             </AnimatePresence>
           </tbody>
         </table>

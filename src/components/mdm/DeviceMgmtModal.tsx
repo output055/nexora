@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Smartphone, MapPin, Shield, AppWindow, RefreshCw, Server, Send } from 'lucide-react';
+import { X, Smartphone, MapPin, Shield, AppWindow, RefreshCw, Server, Send, Loader2 } from 'lucide-react';
 import { 
   getDeviceAppsAction, 
   associateDeviceAppAction, 
@@ -247,7 +247,7 @@ export function DeviceMgmtModal({ device, location, onClose }: DeviceMgmtModalPr
                 <div className="space-y-2">
                   <h4 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">Installed Applications</h4>
                   {loadingApps ? (
-                    <div className="text-center py-8 text-slate-500 animate-pulse">Loading apps...</div>
+                    <div className="flex flex-col items-center justify-center py-8 text-slate-500 gap-3"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /><span>Loading apps...</span></div>
                   ) : apps && apps.length > 0 ? (
                     apps.map((app: any, idx) => (
                       <div key={idx} className="flex items-center justify-between p-3 bg-white/[0.02] border border-white/5 rounded-xl">
@@ -276,7 +276,7 @@ export function DeviceMgmtModal({ device, location, onClose }: DeviceMgmtModalPr
                 className="space-y-4"
               >
                 {loadingSecurity ? (
-                   <div className="text-center py-8 text-slate-500 animate-pulse">Running security audit...</div>
+                   <div className="flex flex-col items-center justify-center py-8 text-slate-500 gap-3"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /><span>Running security audit...</span></div>
                 ) : securityData ? (
                   <div className="space-y-4">
                     {/* FileVault (macOS mainly) */}

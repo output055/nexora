@@ -60,9 +60,24 @@ create table if not exists public.customers (
   occupation          text,
   place_of_work       text,
   payment_cycle       text check (payment_cycle in ('daily', 'weekly', 'bi_weekly')),
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now()
+);
+
+comment on table public.customers is 'Installment financing customers';
+
+create unique index if not exists idx_customers_ghana_card_id on public.customers(ghana_card_id) where ghana_card_id is not null;
+
+-- ── Devices ───────────────────────────────────────────────────────────────────
+create table if not exists public.devices (
+  id                  uuid primary key default uuid_generate_v4(),
+  customer_id         uuid not null references public.customers(id) on delete cascade,
   os_platform         text not null check (os_platform in ('iOS', 'Android')),
   device_model        text not null,
-  mdm_device_id  text not null,
+  mdm_device_id       text not null,
+  imei                text,
+  serial_number       text,
+  os_version          text,
   total_owed          numeric(12, 2) not null default 0,
   remaining_balance   numeric(12, 2) not null default 0,
   payment_status      text not null default 'current' check (payment_status in ('current', 'overdue')),
@@ -70,55 +85,9 @@ create table if not exists public.customers (
   updated_at          timestamptz not null default now()
 );
 
-comment on table public.customers is 'Installment financing customers with MDM device tracking';
+comment on table public.devices is 'MDM devices linked to customers';
 
-alter table public.customers add column if not exists ghana_card_id text;
-alter table public.customers add column if not exists ghana_card_scan_path text;
-alter table public.customers add column if not exists alternative_phone_number text;
-alter table public.customers add column if not exists whatsapp_number text;
-alter table public.customers add column if not exists digital_address text;
-alter table public.customers add column if not exists location_landmarks text;
-alter table public.customers add column if not exists residential_status text check (residential_status in ('owner', 'renting', 'family_house', 'other'));
-alter table public.customers add column if not exists landlord_contact text;
-alter table public.customers add column if not exists occupation text;
-alter table public.customers add column if not exists place_of_work text;
-alter table public.customers add column if not exists payment_cycle text check (payment_cycle in ('daily', 'weekly', 'bi_weekly'));
-
-delete from public.customers c
-using (
-  select ctid
-  from (
-    select
-      ctid,
-      row_number() over (
-        partition by mdm_device_id
-        order by created_at desc, id desc
-      ) as duplicate_rank
-    from public.customers
-  ) ranked
-  where duplicate_rank > 1
-) duplicate
-where c.ctid = duplicate.ctid;
-
-delete from public.customers c
-using (
-  select ctid
-  from (
-    select
-      ctid,
-      row_number() over (
-        partition by ghana_card_id
-        order by created_at desc, id desc
-      ) as duplicate_rank
-    from public.customers
-    where ghana_card_id is not null
-  ) ranked
-  where duplicate_rank > 1
-) duplicate
-where c.ctid = duplicate.ctid;
-
-create unique index if not exists idx_customers_ghana_card_id on public.customers(ghana_card_id) where ghana_card_id is not null;
-create unique index if not exists idx_customers_mdm_device_id on public.customers(mdm_device_id);
+create unique index if not exists idx_devices_mdm_device_id on public.devices(mdm_device_id);
 
 insert into storage.buckets (id, name, public)
 values ('ghana-card-scans', 'ghana-card-scans', false)
@@ -147,7 +116,7 @@ create table if not exists public.audit_logs (
 comment on table public.audit_logs is 'Immutable event log for all privileged actions';
 
 -- ── Indexes ───────────────────────────────────────────────────────────────────
-create index if not exists idx_customers_payment_status on public.customers(payment_status);
+create index if not exists idx_devices_payment_status on public.devices(payment_status);
 create index if not exists idx_payments_customer_id on public.payments(customer_id);
 create index if not exists idx_payments_collector_id on public.payments(collector_id);
 create index if not exists idx_audit_logs_timestamp on public.audit_logs(timestamp desc);
@@ -160,6 +129,7 @@ alter table public.roles enable row level security;
 alter table public.role_permissions enable row level security;
 alter table public.user_roles enable row level security;
 alter table public.customers enable row level security;
+alter table public.devices enable row level security;
 alter table public.payments enable row level security;
 alter table public.audit_logs enable row level security;
 
@@ -192,6 +162,15 @@ drop policy if exists "Authenticated staff can update customers" on public.custo
 create policy "Authenticated staff can update customers"
   on public.customers for update to authenticated using (true);
 
+-- Devices: authenticated staff can read and write
+drop policy if exists "Authenticated staff can read devices" on public.devices;
+create policy "Authenticated staff can read devices"
+  on public.devices for select to authenticated using (true);
+
+drop policy if exists "Authenticated staff can update devices" on public.devices;
+create policy "Authenticated staff can update devices"
+  on public.devices for update to authenticated using (true);
+
 -- Payments: authenticated staff can insert and read
 drop policy if exists "Authenticated staff can insert payments" on public.payments;
 create policy "Authenticated staff can insert payments"
@@ -222,6 +201,11 @@ $$;
 drop trigger if exists customers_updated_at on public.customers;
 create trigger customers_updated_at
   before update on public.customers
+  for each row execute function public.update_updated_at();
+
+drop trigger if exists devices_updated_at on public.devices;
+create trigger devices_updated_at
+  before update on public.devices
   for each row execute function public.update_updated_at();
 
 -- ── Seed Data ─────────────────────────────────────────────────────────────────

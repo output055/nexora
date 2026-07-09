@@ -170,12 +170,6 @@ export async function POST(request: NextRequest) {
         occupation: payload.occupation,
         place_of_work: payload.place_of_work,
         payment_cycle: payload.payment_cycle,
-        os_platform: payload.os_platform,
-        device_model: payload.device_model,
-        mdm_device_id: payload.mdm_device_id,
-        total_owed: payload.total_owed,
-        remaining_balance: payload.total_owed,
-        payment_status: 'current',
       })
       .select('*')
       .single();
@@ -188,12 +182,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { data: device, error: deviceError } = await admin
+      .from('devices')
+      .insert({
+        customer_id: customer.id,
+        os_platform: payload.os_platform,
+        device_model: payload.device_model,
+        mdm_device_id: payload.mdm_device_id,
+        imei: payload.imei || null,
+        serial_number: payload.serial_number || null,
+        os_version: payload.os_version || null,
+        total_owed: payload.total_owed,
+        remaining_balance: payload.total_owed,
+        payment_status: 'current',
+      })
+      .select('*')
+      .single();
+
+    if (deviceError || !device) {
+      await admin.from('customers').delete().eq('id', customer.id);
+      await admin.storage.from('ghana-card-scans').remove([scanPath]);
+      return NextResponse.json(
+        { success: false, error: deviceError?.message ?? 'Unable to link device.' },
+        { status: 500 }
+      );
+    }
+
     const { error: auditError } = await admin.from('audit_logs').insert({
       actor_name: user.email ?? 'Unknown',
       action_description: `Admin registered new ${payload.os_platform} device ${payload.mdm_device_id} to customer ${payload.full_name} (${payload.ghana_card_id})`,
     });
 
     if (auditError) {
+      await admin.from('devices').delete().eq('id', device.id);
       await admin.from('customers').delete().eq('id', customer.id);
       await admin.storage.from('ghana-card-scans').remove([scanPath]);
       return NextResponse.json({ success: false, error: auditError.message }, { status: 500 });

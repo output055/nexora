@@ -54,9 +54,19 @@ export interface Customer {
   occupation?: string;
   place_of_work?: string;
   payment_cycle?: PaymentCycle;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Device {
+  id: string;
+  customer_id: string;
   os_platform: OsPlatform;
   device_model: string;
   mdm_device_id: string;
+  imei?: string;
+  serial_number?: string;
+  os_version?: string;
   total_owed: number;
   remaining_balance: number;
   payment_status: PaymentStatus;

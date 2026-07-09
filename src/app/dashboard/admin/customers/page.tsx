@@ -4,11 +4,15 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users } from 'lucide-react';
 import { CustomerTable } from '@/components/dashboard/admin/CustomerTable';
-import type { Customer } from '@/types';
+import type { Customer, Device } from '@/types';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 
+export interface CustomerWithDevices extends Customer {
+  devices: Device[] | null;
+}
+
 export default function AdminCustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<CustomerWithDevices[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -16,22 +20,22 @@ export default function AdminCustomersPage() {
       const supabase = createBrowserSupabaseClient();
       const { data, error } = await supabase
         .from('customers')
-        .select('*')
+        .select('*, devices(*)')
         .order('created_at', { ascending: false });
 
       if (data && !error) {
-        setCustomers(data);
+        setCustomers(data as any);
       }
       setLoading(false);
     };
     fetchCustomers();
   }, []);
 
-  const handleCustomerUpdate = (id: string, updates: Partial<Customer>) => {
+  const handleCustomerUpdate = (id: string, updates: Partial<CustomerWithDevices>) => {
     setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
   };
 
-  const liveOverdue = customers.filter((c) => c.payment_status === 'overdue').length;
+  const liveOverdue = customers.filter((c) => c.devices?.[0]?.payment_status === 'overdue').length;
   const liveActive = customers.length;
 
   return (
