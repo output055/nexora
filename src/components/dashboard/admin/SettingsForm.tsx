@@ -20,6 +20,15 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
   const [kioskPin, setKioskPin] = useState(
     initialSettings['mdm_kiosk_pin'] || '1234'
   );
+  
+  // Financial Settings
+  const [interestRate, setInterestRate] = useState(
+    initialSettings['payment_interest_rate'] || '30'
+  );
+  const [downPaymentRate, setDownPaymentRate] = useState(
+    initialSettings['payment_down_payment_rate'] || '40'
+  );
+
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
@@ -33,6 +42,8 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
       'mdm_lost_mode_message': lostModeMessage,
       'mdm_lost_mode_phone': lostModePhone,
       'mdm_kiosk_pin': kioskPin,
+      'payment_interest_rate': interestRate,
+      'payment_down_payment_rate': downPaymentRate,
     });
     
     if (result.success) {
@@ -53,9 +64,57 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+      <form onSubmit={handleSubmit} className="space-y-8">
+        
+        {/* Financial Settings Section */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium text-white border-b border-white/5 pb-2">Financial Configuration</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Interest / Installation Fee (%)
+              </label>
+              <p className="text-xs text-gray-400 mb-2">
+                The percentage added to the base device price.
+              </p>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={interestRate}
+                onChange={(e) => setInterestRate(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                placeholder="30"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Down Payment (%)
+              </label>
+              <p className="text-xs text-gray-400 mb-2">
+                The percentage of the total contract value required upfront.
+              </p>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={downPaymentRate}
+                onChange={(e) => setDownPaymentRate(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                placeholder="40"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* MDM Settings Section */}
+        <div className="space-y-4 pt-4 border-t border-white/10">
+          <h3 className="text-lg font-medium text-white border-b border-white/5 pb-2">MDM Device Rules</h3>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
             Overdue Lock Command
           </label>
           <p className="text-xs text-gray-400 mb-3">
@@ -120,6 +179,7 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
             </div>
           </div>
         )}
+        </div>
 
         <button
           type="submit"

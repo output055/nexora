@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/l
 import { hasPermission } from '@/lib/permissions';
 import { updateDeviceAssetOwner } from '@/lib/scalefusion';
 import { calculatePaymentPlan, calculateNextPaymentDate } from '@/lib/utils/calculator';
+import { getSystemSetting } from '@/app/actions/settings';
 import type { Customer, OsPlatform, PaymentCycle, ResidentialStatus } from '@/types';
 
 type RegisterDevicePayload = {
@@ -186,10 +187,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const interestRateStr = await getSystemSetting('payment_interest_rate');
+    const downPaymentRateStr = await getSystemSetting('payment_down_payment_rate');
+    
+    const interestRate = interestRateStr ? Number(interestRateStr) : 30;
+    const downPaymentRate = downPaymentRateStr ? Number(downPaymentRateStr) : 40;
+
     const plan = calculatePaymentPlan({
       basePrice: payload.base_price,
       durationMonths: payload.contract_duration_months,
-      cycle: payload.payment_cycle
+      cycle: payload.payment_cycle,
+      interestRate,
+      downPaymentRate
     });
 
     const nextPaymentDate = calculateNextPaymentDate(new Date(), payload.payment_cycle);

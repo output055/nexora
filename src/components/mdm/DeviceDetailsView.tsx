@@ -64,6 +64,7 @@ export function DeviceDetailsView({ device, location, onBack }: DeviceDetailsVie
     if (actionName === 'Corporate Wipe') apiCommandName = 'corporate_wipe';
     if (actionName === 'Enable Kiosk Mode') apiCommandName = 're_apply_kiosk';
     if (actionName === 'Disable Kiosk Mode') apiCommandName = 'pause_kiosk';
+    if (actionName === 'Buzz Device') apiCommandName = 'remote_alarm';
 
     const extraData = actionName === 'Lock Device' ? { passcode: Math.floor(100000 + Math.random() * 900000).toString() } : {};
     
@@ -184,21 +185,23 @@ export function DeviceDetailsView({ device, location, onBack }: DeviceDetailsVie
                       </>
                     )}
                     
-                    {isKioskMode ? (
-                      <button onClick={() => handleAction('Disable Kiosk Mode')} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg transition-colors group">
-                        <LayoutGrid size={16} className="text-indigo-400 group-hover:scale-110 transition-transform" />
-                        Disable Kiosk Mode
-                      </button>
-                    ) : (
-                      <button onClick={() => handleAction('Enable Kiosk Mode')} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-indigo-500/10 rounded-lg transition-colors group">
-                        <LayoutGrid size={16} className="text-indigo-400 group-hover:scale-110 transition-transform" />
-                        Enable Kiosk Mode
-                      </button>
-                    )}
+                    <button onClick={() => handleAction('Disable Kiosk Mode')} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg transition-colors group">
+                      <LayoutGrid size={16} className="text-indigo-400 group-hover:scale-110 transition-transform" />
+                      Disable Kiosk Mode
+                    </button>
+                    <button onClick={() => handleAction('Enable Kiosk Mode')} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-indigo-500/10 rounded-lg transition-colors group">
+                      <LayoutGrid size={16} className="text-indigo-400 group-hover:scale-110 transition-transform" />
+                      Enable Kiosk Mode
+                    </button>
                     <button onClick={() => handleAction('Sync Policies')} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-blue-500/10 rounded-lg transition-colors group">
                       <RefreshCw size={16} className="text-blue-500 group-hover:rotate-180 transition-transform duration-500" />
                       Sync Policies
                     </button>
+                    <button onClick={() => handleAction('Buzz Device')} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-emerald-500/10 rounded-lg transition-colors group">
+                      <Smartphone size={16} className="text-emerald-400 group-hover:scale-110 group-hover:animate-ping transition-transform" />
+                      Buzz Device
+                    </button>
+                    <div className="h-px w-full bg-white/5 my-1" />
                     <button onClick={() => handleAction('Restart Device')} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors group">
                       <Power size={16} className="text-slate-400 group-hover:text-white transition-colors" />
                       Remote Restart

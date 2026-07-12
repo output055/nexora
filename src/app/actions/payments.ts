@@ -85,7 +85,13 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
       const updatePayload: any = { next_payment_date: nextDate.toISOString() };
       
       let needsUnlock = false;
-      if (deviceBeforePayment && deviceBeforePayment.payment_status === 'overdue') {
+      let needsUnenroll = false;
+      
+      const newBalance = Math.max((deviceBeforePayment?.remaining_balance || 0) - input.amount, 0);
+
+      if (newBalance <= 0) {
+        needsUnenroll = true;
+      } else if (deviceBeforePayment && deviceBeforePayment.payment_status === 'overdue') {
         updatePayload.payment_status = 'current';
         needsUnlock = true;
       }
@@ -115,6 +121,20 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
         } catch (mdmError) {
           console.error('Failed to send unlock command to MDM:', mdmError);
           // Don't fail the payment if MDM fails, just log it.
+        }
+      }
+
+      if (!updateError && needsUnenroll) {
+        // Trigger MDM Unenroll Command (Corporate Wipe)
+        try {
+          await sendDeviceCommand(deviceBeforePayment.mdm_device_id, 'CorporateWipe');
+          
+          await supabase.from('audit_logs').insert({
+            actor_name: 'System',
+            action_description: `Automatically unenrolled device ${deviceBeforePayment.mdm_device_id} (Fully Paid).`
+          });
+        } catch (mdmError) {
+          console.error('Failed to send CorporateWipe command to MDM:', mdmError);
         }
       }
 

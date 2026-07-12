@@ -2,6 +2,8 @@ export interface PaymentPlanOptions {
   basePrice: number;
   durationMonths: number;
   cycle: 'daily' | 'weekly' | 'bi_weekly' | 'monthly';
+  interestRate?: number;
+  downPaymentRate?: number;
 }
 
 export interface PaymentPlanResult {
@@ -19,13 +21,15 @@ export interface PaymentPlanResult {
 export function calculatePaymentPlan({
   basePrice,
   durationMonths,
-  cycle
+  cycle,
+  interestRate = 30,
+  downPaymentRate = 40
 }: PaymentPlanOptions): PaymentPlanResult {
-  // 1. Total Contract Value = Base Price + 30% Installation/Interest Fee
-  const totalContractValue = basePrice * 1.30;
+  // 1. Total Contract Value = Base Price + Interest Fee (e.g. 30%)
+  const totalContractValue = basePrice * (1 + interestRate / 100);
   
-  // 2. Down Payment = 40% of Total Contract Value
-  const downPayment = totalContractValue * 0.40;
+  // 2. Down Payment = Percentage (e.g. 40%) of Total Contract Value
+  const downPayment = totalContractValue * (downPaymentRate / 100);
   
   // 3. Remaining Balance
   const remainingBalance = totalContractValue - downPayment;
