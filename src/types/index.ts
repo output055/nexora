@@ -1,6 +1,6 @@
 // ─── Domain Enums ──────────────────────────────────────────────────────────────
 export type OsPlatform = 'iOS' | 'Android';
-export type PaymentStatus = 'current' | 'overdue';
+export type PaymentStatus = 'current' | 'overdue' | 'completed';
 export type ResidentialStatus = 'owner' | 'renting' | 'family_house' | 'other';
 export type PaymentCycle = 'daily' | 'weekly' | 'bi_weekly';
 

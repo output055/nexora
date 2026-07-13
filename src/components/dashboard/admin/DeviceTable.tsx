@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { Search, Lock, Unlock, Loader2, Apple, Smartphone, ChevronUp, ChevronDown, X, Edit2, Trash2 } from 'lucide-react';
+import { Search, Lock, Unlock, Loader2, Apple, Smartphone, ChevronUp, ChevronDown, X, Edit2, Trash2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Customer } from '@/types';
 import type { DeviceWithCustomer } from '@/app/dashboard/admin/devices/page';
@@ -240,11 +240,15 @@ export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
                         d.payment_status === 'overdue'
                           ? 'bg-red-500/15 text-red-400 border border-red-500/20'
-                          : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                          : d.payment_status === 'completed'
+                            ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+                            : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
                       }`}>
                         {d.payment_status === 'overdue'
                           ? <><Lock size={10} /> Locked</>
-                          : <><Unlock size={10} /> Unlocked</>}
+                          : d.payment_status === 'completed'
+                            ? <><CheckCircle2 size={10} /> Owned</>
+                            : <><Unlock size={10} /> Unlocked</>}
                       </span>
                     </td>
                     <td className="px-4 py-3.5">

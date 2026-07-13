@@ -91,6 +91,7 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
 
       if (newBalance <= 0) {
         needsUnenroll = true;
+        updatePayload.payment_status = 'completed';
       } else if (deviceBeforePayment && deviceBeforePayment.payment_status === 'overdue') {
         updatePayload.payment_status = 'current';
         needsUnlock = true;

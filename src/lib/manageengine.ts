@@ -29,6 +29,9 @@ export interface ZohoTokenResponse {
  * 
  * @returns {Promise<string>} The valid access_token.
  */
+// Global promise to deduplicate concurrent token refresh requests within the same instance
+let tokenRefreshPromise: Promise<string> | null = null;
+
 export async function getValidAccessToken(forceRefresh = false): Promise<string> {
   const supabase = createServiceRoleSupabaseClient();
   const tokenKey = 'zoho_mdm_token';
@@ -49,57 +52,70 @@ export async function getValidAccessToken(forceRefresh = false): Promise<string>
     }
   }
 
-  // 2. Token is missing or expired, fetch a new one
-  const clientId = process.env.CLIENT_ID;
-  const clientSecret = process.env.CLIENT_SECRET;
-  const refreshToken = process.env.ZOHO_REFRESH_TOKEN;
-
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('Missing Zoho OAuth credentials in environment variables.');
+  // 2. Token is missing or expired. If a fetch is already in progress, wait for it.
+  if (tokenRefreshPromise) {
+    return tokenRefreshPromise;
   }
 
-  const params = new URLSearchParams({
-    grant_type: 'refresh_token',
-    client_id: clientId,
-    client_secret: clientSecret,
-    refresh_token: refreshToken,
-  });
+  tokenRefreshPromise = (async () => {
+    try {
+      const clientId = process.env.CLIENT_ID;
+      const clientSecret = process.env.CLIENT_SECRET;
+      const refreshToken = process.env.ZOHO_REFRESH_TOKEN;
 
-  const accountsUrl = process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.com';
+      if (!clientId || !clientSecret || !refreshToken) {
+        throw new Error('Missing Zoho OAuth credentials in environment variables.');
+      }
 
-  const response = await fetch(`${accountsUrl}/oauth/v2/token`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: params.toString(),
-  });
+      const params = new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+      });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Zoho API responded with status ${response.status}: ${errorText}`);
-  }
+      const accountsUrl = process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.com';
 
-  const data = await response.json();
+      const response = await fetch(`${accountsUrl}/oauth/v2/token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params.toString(),
+      });
 
-  if (data.error) {
-    throw new Error(`Zoho OAuth Error: ${data.error} - ${data.error_description || ''}`);
-  }
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Zoho API responded with status ${response.status}: ${errorText}`);
+      }
 
-  const newToken = data.access_token;
-  // expires_in is typically in seconds. We buffer by 1 minute (60000 ms)
-  const newExpiryTime = new Date(Date.now() + (data.expires_in * 1000) - 60000).toISOString();
+      const data = await response.json();
 
-  // 3. Upsert the new token into Supabase
-  await supabase
-    .from('system_settings')
-    .upsert({ 
-      key: tokenKey, 
-      value: newToken, 
-      expires_at: newExpiryTime 
-    }, { onConflict: 'key' });
+      if (data.error) {
+        throw new Error(`Zoho OAuth Error: ${data.error} - ${data.error_description || ''}`);
+      }
 
-  return newToken;
+      const newToken = data.access_token;
+      // expires_in is typically in seconds. We buffer by 1 minute (60000 ms)
+      const newExpiryTime = new Date(Date.now() + (data.expires_in * 1000) - 60000).toISOString();
+
+      // 3. Upsert the new token into Supabase
+      await supabase
+        .from('system_settings')
+        .upsert({ 
+          key: tokenKey, 
+          value: newToken, 
+          expires_at: newExpiryTime 
+        }, { onConflict: 'key' });
+
+      return newToken;
+    } finally {
+      // Clear the promise once it completes or fails
+      tokenRefreshPromise = null;
+    }
+  })();
+
+  return tokenRefreshPromise;
 }
 
 /**
@@ -159,6 +175,38 @@ export async function fetchManageEngineDevices(): Promise<any> {
 
   } catch (error) {
     console.error('Error fetching ManageEngine devices:', error);
+    throw error;
+  }
+}
+
+export async function fetchManageEngineProfiles(): Promise<any[]> {
+  try {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/profiles`;
+
+    const response = await manageEngineFetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`ManageEngine API responded with status ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    // ManageEngine API typically returns profiles in a 'profiles' array.
+    const profiles = data.profiles || data || [];
+    return profiles.map((p: any) => ({
+      id: String(p.profile_id || p.id),
+      name: p.profile_name || p.name || 'Unnamed Profile',
+      type: p.platform_type || p.type || 'Unknown'
+    }));
+
+  } catch (error) {
+    console.error('Error fetching ManageEngine profiles:', error);
     throw error;
   }
 }
@@ -465,6 +513,170 @@ export async function sendDeviceCommand(deviceId: string, commandName: string, c
     return text ? JSON.parse(text) : { status: 'success' };
   } catch (error) {
     console.error(`Error sending command ${commandName} to device ${deviceId}:`, error);
+    throw error;
+  }
+}
+
+// ── Groups & Profiles ─────────────────────────────────────────────────────────
+
+/**
+ * Fetch all device groups
+ * GET /api/v1/mdm/groups
+ */
+export async function fetchGroups(): Promise<any> {
+  try {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/groups`;
+    const response = await manageEngineFetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`ManageEngine API responded with status ${response.status}: ${errorText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching groups:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch details of a specific group, including members
+ * GET /api/v1/mdm/groups/{group_id}
+ */
+export async function getGroupDetails(groupId: string | number): Promise<any> {
+  try {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/groups/${groupId}`;
+    const response = await manageEngineFetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`ManageEngine API responded with status ${response.status}: ${errorText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error(`Error fetching group details for ${groupId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Add devices to a group
+ * POST /api/v1/mdm/groups/{group_id}/members
+ */
+export async function addDevicesToGroup(groupId: string | number, deviceIds: (string | number)[]): Promise<any> {
+  try {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/groups/${groupId}/members`;
+    const response = await manageEngineFetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ device_ids: deviceIds }),
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`ManageEngine API responded with status ${response.status}: ${errorText}`);
+    }
+    if (response.status === 202 || response.status === 204) {
+      return { status: 'success', message: 'Devices added to group' };
+    }
+    const text = await response.text();
+    return text ? JSON.parse(text) : { status: 'success' };
+  } catch (error) {
+    console.error(`Error adding devices to group ${groupId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch all device profiles
+ * GET /api/v1/mdm/profiles
+ */
+export async function fetchMdmProfiles(): Promise<any> {
+  try {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/profiles`;
+    const response = await manageEngineFetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`ManageEngine API responded with status ${response.status}: ${errorText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching MDM profiles:', error);
+    throw error;
+  }
+}
+
+/**
+ * Associate profile(s) to a specific device
+ * POST /api/v1/mdm/devices/{device_id}/profiles
+ */
+export async function associateProfileToDevice(deviceId: string | number, profileIds: (string | number)[]): Promise<any> {
+  try {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/devices/${deviceId}/profiles`;
+    const response = await manageEngineFetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ profile_ids: profileIds }),
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`ManageEngine API responded with status ${response.status}: ${errorText}`);
+    }
+    if (response.status === 202 || response.status === 204) {
+      return { status: 'success', message: 'Profile associated to device' };
+    }
+    const text = await response.text();
+    return text ? JSON.parse(text) : { status: 'success' };
+  } catch (error) {
+    console.error(`Error associating profile to device ${deviceId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Associate profile(s) to a group
+ * POST /api/v1/mdm/groups/{group_id}/profiles
+ */
+export async function associateProfileToGroup(groupId: string | number, profileIds: (string | number)[]): Promise<any> {
+  try {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/groups/${groupId}/profiles`;
+    const response = await manageEngineFetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ profile_ids: profileIds }),
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`ManageEngine API responded with status ${response.status}: ${errorText}`);
+    }
+    if (response.status === 202 || response.status === 204) {
+      return { status: 'success', message: 'Profile associated to group' };
+    }
+    const text = await response.text();
+    return text ? JSON.parse(text) : { status: 'success' };
+  } catch (error) {
+    console.error(`Error associating profile to group ${groupId}:`, error);
     throw error;
   }
 }

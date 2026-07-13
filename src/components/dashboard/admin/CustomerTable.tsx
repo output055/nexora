@@ -330,12 +330,23 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
                       primaryDevice?.payment_status === 'overdue'
                         ? 'bg-red-500/15 text-red-400 border border-red-500/20'
-                        : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                        : primaryDevice?.payment_status === 'completed'
+                          ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+                          : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
                     }`}>
                       <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
-                        primaryDevice?.payment_status === 'overdue' ? 'bg-red-400' : 'bg-emerald-400'
+                        primaryDevice?.payment_status === 'overdue' 
+                          ? 'bg-red-400' 
+                          : primaryDevice?.payment_status === 'completed'
+                            ? 'bg-amber-400'
+                            : 'bg-emerald-400'
                       }`} />
-                      {primaryDevice?.payment_status === 'overdue' ? 'Overdue' : 'Current'}
+                      {primaryDevice?.payment_status === 'overdue' 
+                        ? 'Overdue' 
+                        : primaryDevice?.payment_status === 'completed'
+                          ? 'Completed'
+                          : 'Current'
+                      }
                     </span>
                   </td>
                   <td className="px-4 py-3.5">

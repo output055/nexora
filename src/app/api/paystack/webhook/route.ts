@@ -63,14 +63,29 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: insertError.message }, { status: 500 });
       }
 
-      // 3. Automated MDM Enforcement (Unlock if overdue)
-      if (deviceBeforePayment && deviceBeforePayment.payment_status === 'overdue') {
+      // 3. Automated MDM Enforcement & Status Update
+      const { data: updatedDevice } = await supabase
+        .from('devices')
+        .select('remaining_balance')
+        .eq('id', deviceId)
+        .single();
+        
+      const newBalance = updatedDevice?.remaining_balance || 0;
+      let nextStatus = undefined;
+      
+      if (newBalance <= 0) {
+        nextStatus = 'completed';
+      } else if (deviceBeforePayment && deviceBeforePayment.payment_status === 'overdue') {
+        nextStatus = 'current';
+      }
+
+      if (nextStatus) {
         const { error: updateError } = await supabase
           .from('devices')
-          .update({ payment_status: 'current' })
+          .update({ payment_status: nextStatus })
           .eq('id', deviceId);
 
-        if (!updateError) {
+        if (!updateError && deviceBeforePayment?.payment_status === 'overdue') {
           try {
             const lockCommand = await getSystemSetting('mdm_overdue_lock_command') || 'LostMode';
             if (lockCommand === 'LostMode') {

@@ -191,8 +191,19 @@ export default function RetailerPage() {
                     <p className="text-xs text-slate-500 mt-0.5 truncate">{c.phone_number} · {c.device_model}</p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className={`text-sm font-bold ${c.payment_status === 'overdue' ? 'text-red-400' : 'text-emerald-400'}`}>
-                      {c.payment_status === 'overdue' ? '⚠ Overdue' : '✓ Current'}
+                    <p className={`text-sm font-bold ${
+                      c.payment_status === 'overdue' 
+                        ? 'text-red-400' 
+                        : c.payment_status === 'completed'
+                          ? 'text-amber-400'
+                          : 'text-emerald-400'
+                    }`}>
+                      {c.payment_status === 'overdue' 
+                        ? '⚠ Overdue' 
+                        : c.payment_status === 'completed'
+                          ? '★ Completed'
+                          : '✓ Current'
+                      }
                     </p>
                     <p className="text-xs text-slate-600">GH₵{c.remaining_balance.toLocaleString()} left</p>
                   </div>
@@ -247,12 +258,16 @@ export default function RetailerPage() {
                   <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold
                     ${selected.payment_status === 'overdue'
                       ? 'bg-red-500/15 text-red-400 border border-red-500/20'
-                      : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                      : selected.payment_status === 'completed'
+                        ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+                        : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
                     }
                   `}>
                     {selected.payment_status === 'overdue'
                       ? <><AlertTriangle size={10} /> Overdue</>
-                      : <><CheckCircle2 size={10} /> Current</>
+                      : selected.payment_status === 'completed'
+                        ? <><CheckCircle2 size={10} /> Completed</>
+                        : <><CheckCircle2 size={10} /> Current</>
                     }
                   </span>
                 </div>

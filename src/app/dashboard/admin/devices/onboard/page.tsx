@@ -31,6 +31,8 @@ type DiscoveredDevice = {
   id: string;
   serial: string;
   model: string;
+  imei?: string;
+  os_version?: string;
 };
 
 type DeviceProfile = {
@@ -55,6 +57,9 @@ type RegisterForm = {
   payment_cycle: PaymentCycle | '';
   device_model: string;
   mdm_device_id: string;
+  imei: string;
+  serial_number: string;
+  os_version: string;
   base_price: string;
   contract_duration_months: string;
 };
@@ -94,8 +99,11 @@ const emptyForm: RegisterForm = {
   payment_cycle: '',
   device_model: '',
   mdm_device_id: '',
+  imei: '',
+  serial_number: '',
+  os_version: '',
   base_price: '',
-  contract_duration_months: '6',
+  contract_duration_months: '3',
 };
 
 // Android gets 6 steps: QR Enrollment → Device → Identity → Contact → Location → Work
@@ -141,22 +149,9 @@ export default function DeviceOnboardingPage() {
   const [fetchingProfiles, setFetchingProfiles] = useState(false);
 
   useEffect(() => {
-    const fetchProfiles = async () => {
-      setFetchingProfiles(true);
-      try {
-        const res = await fetch('/api/devices/profiles');
-        const json = await res.json();
-        if (json.success && json.data) {
-          setProfiles(json.data);
-        }
-      } catch (err) {
-        console.error('Failed to fetch profiles', err);
-      } finally {
-        setFetchingProfiles(false);
-      }
-    };
-    fetchProfiles();
-  }, []);
+    fetchDevices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workflow]);
 
   // QR enrollment confirmation gate (Android only)
   const [qrConfirmed, setQrConfirmed] = useState(false);
@@ -174,6 +169,18 @@ export default function DeviceOnboardingPage() {
   const updateForm = (platform: Workflow, field: keyof RegisterForm, value: string | File | null) => {
     const setter = platform === 'Android' ? setAndroidForm : setIosForm;
     setter((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleDeviceSelect = (deviceId: string) => {
+    setSelectedDeviceId(deviceId);
+    const device = activeDevices.find((d) => d.id === deviceId);
+    if (device) {
+      updateForm(workflow, 'mdm_device_id', device.id);
+      updateForm(workflow, 'device_model', device.model);
+      updateForm(workflow, 'serial_number', device.serial || '');
+      updateForm(workflow, 'imei', device.imei || '');
+      updateForm(workflow, 'os_version', device.os_version || '');
+    }
   };
 
   const validateStep = (step: StepId) => {
@@ -223,9 +230,7 @@ export default function DeviceOnboardingPage() {
     setFetchingDevices(true);
     const platform = workflow === 'Android' ? 'android' : 'ios';
     try {
-      const url = selectedProfileId 
-        ? `/api/devices/discover?platform=${platform}&profile_id=${selectedProfileId}`
-        : `/api/devices/discover?platform=${platform}`;
+      const url = `/api/devices/discover?platform=${platform}`;
       const response = await fetch(url, { method: 'GET' });
       const result = await response.json() as DiscoverResponse;
 
@@ -263,6 +268,9 @@ export default function DeviceOnboardingPage() {
     formData.set('os_platform', platform);
     formData.set('device_model', form.device_model);
     formData.set('mdm_device_id', form.mdm_device_id);
+    formData.set('imei', form.imei);
+    formData.set('serial_number', form.serial_number);
+    formData.set('os_version', form.os_version);
     formData.set('base_price', form.base_price);
     formData.set('contract_duration_months', form.contract_duration_months);
 
@@ -318,16 +326,7 @@ export default function DeviceOnboardingPage() {
     }
   };
 
-  const handleDeviceSelect = (id: string) => {
-    const device = activeDevices.find((item) => item.id === id);
-    setSelectedDeviceId(id);
-    const setter = workflow === 'Android' ? setAndroidForm : setIosForm;
-    setter((prev) => ({
-      ...prev,
-      device_model: device?.model ?? '',
-      mdm_device_id: device?.id ?? '',
-    }));
-  };
+
 
   return (
     <motion.div
@@ -676,6 +675,7 @@ function DeviceStep({
           </button>
         </div>
 
+        {/* Profile select hidden for now
         <select
           id={`${workflow.toLowerCase()}-profile`}
           value={selectedProfileId}
@@ -692,6 +692,7 @@ function DeviceStep({
             </option>
           ))}
         </select>
+        */}
 
         <select
           id={`${workflow.toLowerCase()}-device`}

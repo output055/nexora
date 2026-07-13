@@ -54,26 +54,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: customer, error: customerError } = await supabase
-      .from('customers')
+    const { data: devices, error: deviceError } = await supabase
+      .from('devices')
       .select('*')
-      .eq('id', parsed.customerId)
-      .single();
+      .eq('customer_id', parsed.customerId);
 
-    if (customerError || !customer) {
+    if (deviceError || !devices || devices.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Customer not found.' },
+        { success: false, error: 'Customer device not found.' },
         { status: 404 }
       );
     }
 
-    const currentCustomer = customer as Customer;
-    const currentBalance = Number(currentCustomer.remaining_balance);
+    // Assuming we apply payment to the primary/first device for now
+    const currentDevice = devices[0];
+    const currentBalance = Number(currentDevice.remaining_balance);
     const newBalance = Math.max(0, currentBalance - parsed.amount);
-    const paymentStatus: PaymentStatus = newBalance === 0 ? 'current' : currentCustomer.payment_status;
+    const paymentStatus: PaymentStatus = newBalance === 0 ? 'completed' : currentDevice.payment_status;
 
     const { error: paymentError } = await supabase.from('payments').insert({
-      customer_id: currentCustomer.id,
+      customer_id: parsed.customerId,
       amount_paid: parsed.amount,
       collector_id: user.id,
     });
@@ -85,21 +85,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: updatedCustomer, error: updateError } = await supabase
-      .from('customers')
+    const { data: updatedDevice, error: updateError } = await supabase
+      .from('devices')
       .update({
         remaining_balance: newBalance,
         payment_status: paymentStatus,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', currentCustomer.id)
+      .eq('id', currentDevice.id)
       .select('*')
       .single();
 
-    if (updateError || !updatedCustomer) {
+    if (updateError || !updatedDevice) {
       await supabase.from('audit_logs').insert({
         actor_name: user.email ?? 'Unknown',
-        action_description: `PAYMENT POSTED but balance update failed for ${currentCustomer.full_name} - ${updateError?.message ?? 'unknown error'}`,
+        action_description: `PAYMENT POSTED but balance update failed for customer ID ${parsed.customerId} - ${updateError?.message ?? 'unknown error'}`,
       });
 
       return NextResponse.json(
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
 
     await supabase.from('audit_logs').insert({
       actor_name: user.email ?? 'Unknown',
-      action_description: `Logged payment of GHS ${parsed.amount.toLocaleString()} for ${currentCustomer.full_name} - balance ${newBalance === 0 ? 'cleared' : `now GHS ${newBalance.toLocaleString()}`}`,
+      action_description: `Payment of GH₵${parsed.amount} manually logged for customer ID ${parsed.customerId}`,
     });
 
     let unlockResult: { attempted: boolean; success: boolean; error?: string } = {

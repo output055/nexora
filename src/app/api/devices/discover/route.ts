@@ -26,16 +26,21 @@ export async function GET(request: NextRequest) {
     const platform = request.nextUrl.searchParams.get('platform') === 'ios' ? 'ios' : 'android';
     const manageEngineData = await fetchManageEngineDevices();
     
-    // Map ManageEngine format to expected frontend format
+    const { data: boundDevices } = await supabase.from('devices').select('mdm_device_id');
+    const boundIds = new Set(boundDevices?.map(d => d.mdm_device_id) || []);
+
+    // Map ManageEngine format to expected frontend format and filter out bounded devices
     const devices = (manageEngineData.devices || [])
       .filter((d: any) => d.platform_type?.toLowerCase() === platform)
       .map((d: any) => ({
         id: String(d.device_id),
         serial: d.serial_number || 'N/A',
         model: d.model || d.product_name || 'Unknown Device',
-      }));
+        imei: d.imei || '',
+        os_version: d.os_version || '',
+      }))
+      .filter((d: any) => !boundIds.has(d.id));
 
-    // Return all devices without checking assigned status since DB column does not exist yet
     return NextResponse.json({
       success: true,
       data: devices,

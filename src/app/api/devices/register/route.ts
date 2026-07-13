@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { updateDeviceAssetOwner } from '@/lib/scalefusion';
 import { calculatePaymentPlan, calculateNextPaymentDate } from '@/lib/utils/calculator';
 import { getSystemSetting } from '@/app/actions/settings';
 import type { Customer, OsPlatform, PaymentCycle, ResidentialStatus } from '@/types';
@@ -22,6 +21,9 @@ type RegisterDevicePayload = {
   os_platform: OsPlatform;
   device_model: string;
   mdm_device_id: string;
+  imei: string;
+  serial_number: string;
+  os_version: string;
   base_price: number;
   contract_duration_months: number;
   ghana_card_scan: File;
@@ -55,6 +57,9 @@ function parseRegisterPayload(formData: FormData):
     os_platform: cleanString(formData, 'os_platform'),
     device_model: cleanString(formData, 'device_model'),
     mdm_device_id: cleanString(formData, 'mdm_device_id'),
+    imei: cleanString(formData, 'imei'),
+    serial_number: cleanString(formData, 'serial_number'),
+    os_version: cleanString(formData, 'os_version'),
     base_price: Number(cleanString(formData, 'base_price')),
     contract_duration_months: Number(cleanString(formData, 'contract_duration_months')),
     ghana_card_scan: formData.get('ghana_card_scan'),
@@ -248,26 +253,22 @@ export async function POST(request: NextRequest) {
 
     let miradoreSync = { attempted: false, success: false, error: undefined as string | undefined };
 
-    if (payload.os_platform === 'iOS') {
-      const result = await updateDeviceAssetOwner(payload.mdm_device_id, payload.full_name);
-      miradoreSync = {
-        attempted: true,
-        success: result.success,
-        error: result.message,
-      };
+    // Placeholder for future ManageEngine device rename/sync if needed
+    // if (payload.os_platform === 'iOS') { ... }
 
-      if (!result.success) {
-        await admin.from('audit_logs').insert({
-          actor_name: 'System (auto)',
-          action_description: `Miradore asset sync failed for ${payload.mdm_device_id} (${payload.full_name}) - ${result.message ?? 'unknown error'}`,
-        });
-      }
-    }
+    // Merge the inserted device fields into the customer object for the frontend
+    const mergedCustomer = {
+      ...customer,
+      device_model: device.device_model,
+      remaining_balance: device.remaining_balance,
+      total_owed: device.total_owed,
+      mdm_device_id: device.mdm_device_id,
+    };
 
     return NextResponse.json({
       success: true,
       data: {
-        customer: customer as Customer,
+        customer: mergedCustomer as Customer,
         miradoreSync,
       },
     });

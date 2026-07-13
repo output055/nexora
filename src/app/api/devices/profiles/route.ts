@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { fetchDeviceProfiles } from '@/lib/scalefusion';
+import { fetchManageEngineProfiles } from '@/lib/manageengine';
 
 export async function GET() {
   try {
@@ -23,7 +23,7 @@ export async function GET() {
       );
     }
 
-    const profiles = await fetchDeviceProfiles();
+    const profiles = await fetchManageEngineProfiles();
 
     return NextResponse.json({
       success: true,
