@@ -280,10 +280,15 @@ export function DashboardSidebar() {
         </nav>
 
       {/* Bottom settings link */}
-      {!isRetailer && (
+      {loading ? (
+        <div className="p-3 border-t border-sidebar-border shrink-0 animate-pulse">
+          <div className="h-10 rounded-xl bg-white/5" />
+        </div>
+      ) : !isRetailer && (
         <div className="p-3 border-t border-sidebar-border shrink-0">
           <Link
             href="/dashboard/admin/settings"
+            suppressHydrationWarning
             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors
               ${pathname === '/dashboard/admin/settings' ? 'bg-blue-500/10 text-blue-400' : 'text-slate-500 hover:bg-white/5 hover:text-slate-200'}
               ${collapsed ? 'justify-center' : ''}

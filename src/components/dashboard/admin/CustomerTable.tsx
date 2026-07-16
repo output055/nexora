@@ -7,6 +7,7 @@ import type { Customer } from '@/types';
 import type { CustomerWithDevices } from '@/app/dashboard/admin/customers/page';
 import Link from 'next/link';
 import { usePagination } from '@/lib/hooks/usePagination';
+import { getCalculatedPaymentStatus } from '@/lib/utils';
 import { PaginationBar } from './PaginationBar';
 import { EditCustomerModal } from './EditCustomerModal';
 import LogPaymentForm from '@/components/dashboard/payments/LogPaymentForm';
@@ -52,7 +53,8 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
           c.phone_number.includes(q) ||
           (primaryDevice?.device_model || '').toLowerCase().includes(q) ||
           (c.ghana_card_id ?? '').toLowerCase().includes(q);
-        const matchStatus = filterStatus === 'all' || primaryDevice?.payment_status === filterStatus;
+        const calcStatus = primaryDevice ? getCalculatedPaymentStatus(primaryDevice.payment_status, primaryDevice.remaining_balance, primaryDevice.next_payment_date) : undefined;
+        const matchStatus = filterStatus === 'all' || calcStatus === filterStatus;
         const matchPlatform = filterPlatform === 'all' || primaryDevice?.os_platform === filterPlatform;
         const matchCycle = filterCycle === 'all' || c.payment_cycle === filterCycle;
         return matchSearch && matchStatus && matchPlatform && matchCycle;
@@ -74,11 +76,9 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
             : bBal - aBal;
         }
         if (sortKey === 'payment_status') {
-          const aStat = aDevice?.payment_status || '';
-          const bStat = bDevice?.payment_status || '';
-          return sortDir === 'asc'
-            ? aStat.localeCompare(bStat)
-            : bStat.localeCompare(aStat);
+          const aStat = aDevice ? getCalculatedPaymentStatus(aDevice.payment_status, aDevice.remaining_balance, aDevice.next_payment_date) : '';
+          const bStat = bDevice ? getCalculatedPaymentStatus(bDevice.payment_status, bDevice.remaining_balance, bDevice.next_payment_date) : '';
+          return sortDir === 'asc' ? aStat.localeCompare(bStat) : bStat.localeCompare(aStat);
         }
         if (sortKey === 'created_at') {
           const aDate = new Date(a.created_at).getTime();
@@ -124,11 +124,6 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
     
     if (success) {
       toast.success('Customer deleted successfully');
-      // Optimistic delete: hide it locally by updating via prop or just re-fetching.
-      // Assuming onCustomerUpdate handles it or we'll add onCustomerDelete prop.
-      // Wait, there's no onCustomerDelete in the parent, but I added it to props.
-      // Let's call onCustomerUpdate with null or something. Actually, we'll just wait for the parent to refresh.
-      // Let's rely on window.location.reload() or let parent handle it.
       window.location.reload(); 
     } else {
       toast.error(error || 'Failed to delete customer');
@@ -327,27 +322,29 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                     <p className="text-xs text-slate-600 mt-0.5">of GH₵{(primaryDevice?.total_owed || 0).toLocaleString()}</p>
                   </td>
                   <td className="px-4 py-3.5">
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                      primaryDevice?.payment_status === 'overdue'
-                        ? 'bg-red-500/15 text-red-400 border border-red-500/20'
-                        : primaryDevice?.payment_status === 'completed'
-                          ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
-                          : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
-                        primaryDevice?.payment_status === 'overdue' 
-                          ? 'bg-red-400' 
-                          : primaryDevice?.payment_status === 'completed'
-                            ? 'bg-amber-400'
-                            : 'bg-emerald-400'
-                      }`} />
-                      {primaryDevice?.payment_status === 'overdue' 
-                        ? 'Overdue' 
-                        : primaryDevice?.payment_status === 'completed'
-                          ? 'Completed'
-                          : 'Current'
-                      }
-                    </span>
+                    {(() => {
+                      const status = primaryDevice ? getCalculatedPaymentStatus(primaryDevice.payment_status, primaryDevice.remaining_balance, primaryDevice.next_payment_date) : null;
+                      return status ? (
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                          status === 'overdue'
+                            ? 'bg-red-500/15 text-red-400 border border-red-500/20'
+                            : status === 'completed'
+                              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+                              : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                            status === 'overdue' 
+                              ? 'bg-red-400' 
+                              : status === 'completed'
+                                ? 'bg-amber-400'
+                                : 'bg-emerald-400'
+                          }`} />
+                          {status === 'overdue' ? 'Overdue' : status === 'completed' ? 'Completed' : 'Current'}
+                        </span>
+                      ) : (
+                        <span className="text-slate-500 text-xs">No Device</span>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3.5">
                     <p className="text-xs text-slate-500">

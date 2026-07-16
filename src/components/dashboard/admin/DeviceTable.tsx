@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { getCalculatedPaymentStatus } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { Smartphone, Apple, CheckCircle2, Lock, XCircle, Search, Filter, RefreshCw, X, ChevronDown, ChevronUp, FileText, Unlock, Loader2, Edit2, Trash2 } from 'lucide-react';
@@ -64,13 +65,19 @@ export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
           d.mdm_device_id.toLowerCase().includes(q) ||
           d.customers?.phone_number.includes(q);
         const matchPlatform = filterPlatform === 'all' || d.os_platform === filterPlatform;
+        const calcStatus = getCalculatedPaymentStatus(d.payment_status, d.remaining_balance, d.next_payment_date);
         const matchLock =
           filterLock === 'all' ||
-          (filterLock === 'locked' && d.payment_status === 'overdue') ||
-          (filterLock === 'unlocked' && d.payment_status !== 'overdue');
+          (filterLock === 'locked' && calcStatus === 'overdue') ||
+          (filterLock === 'unlocked' && calcStatus !== 'overdue');
         return matchSearch && matchPlatform && matchLock;
       })
       .sort((a, b) => {
+        if (sortKey === 'payment_status') {
+          const aStat = getCalculatedPaymentStatus(a.payment_status, a.remaining_balance, a.next_payment_date);
+          const bStat = getCalculatedPaymentStatus(b.payment_status, b.remaining_balance, b.next_payment_date);
+          return sortDir === 'asc' ? aStat.localeCompare(bStat) : bStat.localeCompare(aStat);
+        }
         const aVal = String((sortKey === 'full_name' ? a.customers?.full_name : (a as any)[sortKey]) ?? '');
         const bVal = String((sortKey === 'full_name' ? b.customers?.full_name : (b as any)[sortKey]) ?? '');
         return sortDir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
@@ -238,21 +245,27 @@ export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
                       <p className="text-sm text-slate-300">{d.customers?.full_name}</p>
                       <p className="text-xs text-slate-600 mt-0.5">{d.customers?.phone_number}</p>
                     </td>
-                    <td className="px-4 py-3.5">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
-                        d.payment_status === 'overdue'
-                          ? 'bg-red-500/15 text-red-400 border border-red-500/20'
-                          : d.payment_status === 'completed'
-                            ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
-                            : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
-                      }`}>
-                        {d.payment_status === 'overdue'
-                          ? <><Lock size={10} /> Locked</>
-                          : d.payment_status === 'completed'
-                            ? <><CheckCircle2 size={10} /> Owned</>
-                            : <><Unlock size={10} /> Unlocked</>}
-                      </span>
-                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                    {(() => {
+                      const status = getCalculatedPaymentStatus(d.payment_status, d.remaining_balance, d.next_payment_date);
+                      return (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
+                          status === 'overdue'
+                            ? 'bg-red-500/15 text-red-400'
+                            : status === 'completed'
+                              ? 'bg-amber-500/15 text-amber-400'
+                              : 'bg-emerald-500/15 text-emerald-400'
+                        }`}>
+                          {status === 'overdue' 
+                            ? 'Overdue' 
+                            : status === 'completed'
+                              ? 'Completed'
+                              : 'Current'
+                          }
+                        </span>
+                      );
+                    })()}
+                  </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2">
                         <Link

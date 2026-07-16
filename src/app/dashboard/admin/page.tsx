@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getCalculatedPaymentStatus } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import {
   DollarSign,
@@ -41,7 +42,7 @@ export default function AdminDashboard() {
         { data: paymentsData }
       ] = await Promise.all([
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
-        supabase.from('devices').select('id, payment_status, total_owed'),
+        supabase.from('devices').select('id, payment_status, total_owed, remaining_balance, next_payment_date'),
         supabase.from('payments').select('amount_paid, created_at, collection_date')
       ]);
 
@@ -54,7 +55,9 @@ export default function AdminDashboard() {
       if (devicesData) {
         totalCapitalDeployed = devicesData.reduce((sum, d) => sum + Number(d.total_owed), 0);
         activeAccounts = devicesData.length;
-        overdueAccounts = devicesData.filter((d) => d.payment_status === 'overdue').length;
+        overdueAccounts = devicesData.filter((d) => 
+          getCalculatedPaymentStatus(d.payment_status, d.remaining_balance || 0, d.next_payment_date) === 'overdue'
+        ).length;
       }
 
       let collectionsThisMonth = 0;

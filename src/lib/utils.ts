@@ -60,3 +60,22 @@ export function slugify(text: string): string {
     .replace(/\s+/g, '_')
     .replace(/[^a-z0-9_]/g, '');
 }
+
+export function getCalculatedPaymentStatus(
+  currentStatus: string, 
+  remainingBalance: number, 
+  nextPaymentDate: string | undefined | null
+): 'current' | 'overdue' | 'completed' {
+  if (currentStatus === 'completed' || remainingBalance <= 0) return 'completed';
+  if (currentStatus === 'overdue') return 'overdue';
+  
+  if (nextPaymentDate) {
+    const next = new Date(nextPaymentDate);
+    // Overdue if the date has passed
+    if (next < new Date()) {
+      return 'overdue';
+    }
+  }
+  
+  return 'current';
+}

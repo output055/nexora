@@ -66,11 +66,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Assuming we apply payment to the primary/first device for now
+    const { data: customer, error: customerError } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('id', parsed.customerId)
+      .single();
+
+    if (customerError || !customer) {
+      return NextResponse.json(
+        { success: false, error: 'Customer not found.' },
+        { status: 404 }
+      );
+    }
+
     const currentDevice = devices[0];
     const currentBalance = Number(currentDevice.remaining_balance);
     const newBalance = Math.max(0, currentBalance - parsed.amount);
-    const paymentStatus: PaymentStatus = newBalance === 0 ? 'completed' : currentDevice.payment_status;
+
+    // Date advancement logic
+    let nextDate = currentDevice.next_payment_date
+      ? new Date(currentDevice.next_payment_date)
+      : new Date();
+
+    if (currentDevice.payment_cycle_amount > 0) {
+      const cycle = customer.payment_cycle || 'monthly';
+      const ratio = parsed.amount / currentDevice.payment_cycle_amount;
+      
+      let daysToAdd = 0;
+      if (cycle === 'daily') daysToAdd = ratio * 1;
+      else if (cycle === 'weekly') daysToAdd = ratio * 7;
+      else if (cycle === 'bi_weekly') daysToAdd = ratio * 14;
+      else daysToAdd = ratio * 30; // fallback monthly
+      
+      nextDate.setHours(nextDate.getHours() + (daysToAdd * 24));
+    }
+
+    let paymentStatus: PaymentStatus = currentDevice.payment_status;
+    let needsUnlock = false;
+
+    if (newBalance === 0) {
+      paymentStatus = 'completed';
+    } else if (currentDevice.payment_status === 'overdue') {
+      paymentStatus = 'current';
+      needsUnlock = true;
+    }
 
     const { error: paymentError } = await supabase.from('payments').insert({
       customer_id: parsed.customerId,
@@ -90,6 +129,7 @@ export async function POST(request: NextRequest) {
       .update({
         remaining_balance: newBalance,
         payment_status: paymentStatus,
+        next_payment_date: nextDate.toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq('id', currentDevice.id)
@@ -118,8 +158,8 @@ export async function POST(request: NextRequest) {
       success: false,
     };
 
-    if (newBalance === 0) {
-      const mirResult = await unlockDevice(currentCustomer.mdm_device_id);
+    if (needsUnlock || newBalance === 0) {
+      const mirResult = await unlockDevice(currentDevice.mdm_device_id);
       unlockResult = {
         attempted: true,
         success: mirResult.success,
@@ -129,15 +169,25 @@ export async function POST(request: NextRequest) {
       await supabase.from('audit_logs').insert({
         actor_name: 'System (auto)',
         action_description: mirResult.success
-          ? `AUTO UNLOCK triggered for device ${currentCustomer.mdm_device_id} (${currentCustomer.full_name}) - balance cleared`
-          : `AUTO UNLOCK FAILED for ${currentCustomer.full_name} (${currentCustomer.os_platform}) - ${mirResult.message ?? 'MDM unlock command failed'}`,
+          ? `AUTO UNLOCK triggered for device ${currentDevice.mdm_device_id} (${customer.full_name}) - payment processed`
+          : `AUTO UNLOCK FAILED for ${customer.full_name} (${currentDevice.os_platform}) - ${mirResult.message ?? 'MDM unlock command failed'}`,
       });
     }
+
+    // Map device properties onto customer to match RetailerPage expectations
+    const updatedCustomerForUI = {
+      ...customer,
+      device_model: updatedDevice.device_model,
+      os_platform: updatedDevice.os_platform,
+      payment_status: updatedDevice.payment_status,
+      remaining_balance: updatedDevice.remaining_balance,
+      total_owed: updatedDevice.total_owed,
+    };
 
     return NextResponse.json({
       success: true,
       data: {
-        customer: updatedCustomer as Customer,
+        customer: updatedCustomerForUI,
         payment: {
           amount: parsed.amount,
           wasCleared: newBalance === 0,

@@ -2,6 +2,7 @@ import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/l
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, User, Smartphone, CreditCard, Calendar, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { getCalculatedPaymentStatus } from '@/lib/utils';
 
 export default async function CustomerDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -93,13 +94,20 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
                 </div>
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-slate-500 font-medium">Status</p>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
-                    primaryDevice.payment_status === 'overdue'
-                      ? 'bg-red-500/15 text-red-400'
-                      : 'bg-emerald-500/15 text-emerald-400'
-                  }`}>
-                    {primaryDevice.payment_status === 'overdue' ? 'Overdue' : 'Current'}
-                  </span>
+                  {(() => {
+                    const status = getCalculatedPaymentStatus(primaryDevice.payment_status, primaryDevice.remaining_balance, primaryDevice.next_payment_date);
+                    return (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
+                        status === 'overdue'
+                          ? 'bg-red-500/15 text-red-400'
+                          : status === 'completed' 
+                            ? 'bg-amber-500/15 text-amber-400' 
+                            : 'bg-emerald-500/15 text-emerald-400'
+                      }`}>
+                        {status === 'overdue' ? 'Overdue' : status === 'completed' ? 'Completed' : 'Current'}
+                      </span>
+                    );
+                  })()}
                 </div>
                 
                 <div className="pt-4 border-t border-white/5">

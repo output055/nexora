@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 import type { AuthContextValue, UserProfile } from '@/types';
 import { mockRoles } from '@/lib/mock-data';
@@ -18,6 +19,7 @@ const DEMO_USER: UserProfile = {
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const supabaseConfigured =
     !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const [user, setUser] = useState<UserProfile | null>(supabaseConfigured ? null : DEMO_USER);
@@ -137,12 +139,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     if (!supabaseConfigured) {
       setUser(null);
+      router.push('/login');
       return;
     }
     const supabase = createBrowserSupabaseClient();
     await supabase.auth.signOut();
     setUser(null);
-  }, [supabaseConfigured]);
+    router.push('/login');
+  }, [supabaseConfigured, router]);
 
   const hasPermission = useCallback(
     (permission: string) => {

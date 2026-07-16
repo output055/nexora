@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users } from 'lucide-react';
+import { getCalculatedPaymentStatus } from '@/lib/utils';
 import { CustomerTable } from '@/components/dashboard/admin/CustomerTable';
 import type { Customer, Device } from '@/types';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
@@ -35,7 +36,11 @@ export default function AdminCustomersPage() {
     setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
   };
 
-  const liveOverdue = customers.filter((c) => c.devices?.[0]?.payment_status === 'overdue').length;
+  const liveOverdue = customers.filter((c) => {
+    const primaryDevice = c.devices?.[0];
+    if (!primaryDevice) return false;
+    return getCalculatedPaymentStatus(primaryDevice.payment_status, primaryDevice.remaining_balance, primaryDevice.next_payment_date) === 'overdue';
+  }).length;
   const liveActive = customers.length;
 
   return (
