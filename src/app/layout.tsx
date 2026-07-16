@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Providers } from '@/components/providers';
 import './globals.css';
 
@@ -6,6 +6,13 @@ export const metadata: Metadata = {
   title: 'Nexora | Smartphone Financing & Asset Tracking Platform',
   description:
     'Enterprise-grade installment financing management with over-the-air MDM device control, real-time collections analytics, and dynamic role-based access.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

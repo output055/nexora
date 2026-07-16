@@ -68,7 +68,8 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
         : new Date();
         
       if (deviceBeforePayment && deviceBeforePayment.payment_cycle_amount > 0) {
-        const cycle = deviceBeforePayment.customers?.payment_cycle || 'monthly';
+        const cust: any = deviceBeforePayment.customers;
+        const cycle = (Array.isArray(cust) ? cust[0]?.payment_cycle : cust?.payment_cycle) || 'monthly';
         const ratio = input.amount / deviceBeforePayment.payment_cycle_amount;
         
         let daysToAdd = 0;
@@ -108,7 +109,7 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
           const lockCommand = await getSystemSetting('mdm_overdue_lock_command') || 'LostMode';
           
           if (lockCommand === 'LostMode') {
-            await sendDeviceCommand(deviceBeforePayment.mdm_device_id, 'RemoveLostMode');
+            await sendDeviceCommand(deviceBeforePayment!.mdm_device_id, 'RemoveLostMode');
           } else if (lockCommand === 'DeviceLock') {
              // Depending on MDM, 'DeviceLock' might not have a direct 'Unlock', it just requires the user to enter passcode.
              // But if we have an explicit unlock, we call it here.
@@ -117,7 +118,7 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
           // Log to audit
           await supabase.from('audit_logs').insert({
             actor_name: 'System',
-            action_description: `Automatically unlocked device ${deviceBeforePayment.mdm_device_id} after payment.`
+            action_description: `Automatically unlocked device ${deviceBeforePayment!.mdm_device_id} after payment.`
           });
         } catch (mdmError) {
           console.error('Failed to send unlock command to MDM:', mdmError);
@@ -128,11 +129,11 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
       if (!updateError && needsUnenroll) {
         // Trigger MDM Unenroll Command (Corporate Wipe)
         try {
-          await sendDeviceCommand(deviceBeforePayment.mdm_device_id, 'CorporateWipe');
+          await sendDeviceCommand(deviceBeforePayment!.mdm_device_id, 'CorporateWipe');
           
           await supabase.from('audit_logs').insert({
             actor_name: 'System',
-            action_description: `Automatically unenrolled device ${deviceBeforePayment.mdm_device_id} (Fully Paid).`
+            action_description: `Automatically unenrolled device ${deviceBeforePayment!.mdm_device_id} (Fully Paid).`
           });
         } catch (mdmError) {
           console.error('Failed to send CorporateWipe command to MDM:', mdmError);

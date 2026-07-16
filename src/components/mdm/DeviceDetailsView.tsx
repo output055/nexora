@@ -100,7 +100,7 @@ export function DeviceDetailsView({ device: initialDevice, location, onBack }: D
         if (actionName === 'Disable Kiosk Mode') setIsKioskMode(false);
 
         if (actionName === 'Lock Device') {
-          setLockPin(generatedPin);
+          setLockPin(generatedPin || null);
           return `Device locked. Unlock PIN generated.`;
         }
         return `${actionName} command executed successfully`;
@@ -270,7 +270,7 @@ export function DeviceDetailsView({ device: initialDevice, location, onBack }: D
             {activeTab === 'Alerts' && <AlertsTab device={device} />}
             {activeTab === 'Audit Logs' && <AuditLogsTab device={device} />}
             {activeTab === 'Geo-Tracking' && (
-              <GeoTrackingTab device={device} location={location} />
+              <GeoTrackingTab device={device} initialLocation={location} />
             )}
           </motion.div>
         </AnimatePresence>

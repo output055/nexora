@@ -320,7 +320,7 @@ export default function DeviceOnboardingPage() {
 
       setSelectedDeviceId('');
       setStepIndex(0);
-      toast.success(`${data.customer.device_model} registered to ${data.customer.full_name}.`);
+      toast.success(`${(data.customer as any).device_model} registered to ${data.customer.full_name}.`);
     } catch (submitError) {
       toast.error(submitError instanceof Error ? submitError.message : 'Registration failed.');
     } finally {
@@ -488,7 +488,7 @@ export default function DeviceOnboardingPage() {
               <div>
                 <p className="text-sm font-semibold text-emerald-300">Registration complete</p>
                 <p className="mt-1 text-xs text-slate-400">
-                  {lastCustomer.full_name} now owes GHS {Number(lastCustomer.remaining_balance).toLocaleString()} for {lastCustomer.device_model}.
+                  {lastCustomer.full_name} now owes GHS {Number((lastCustomer as any).remaining_balance).toLocaleString()} for {(lastCustomer as any).device_model}.
                 </p>
               </div>
             </div>

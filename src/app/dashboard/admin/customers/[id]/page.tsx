@@ -112,7 +112,7 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
                 
                 <div className="pt-4 border-t border-white/5">
                   <p className="text-xs text-slate-500 font-medium mb-1">Outstanding Balance</p>
-                  <p className="text-3xl font-bold text-white tabular-nums">
+                  <p className="text-2xl sm:text-3xl font-bold text-white tabular-nums truncate" title={`GH₵ ${Number(primaryDevice.remaining_balance).toLocaleString()}`}>
                     GH₵{Number(primaryDevice.remaining_balance).toLocaleString()}
                   </p>
                   <p className="text-xs text-slate-500 mt-1">

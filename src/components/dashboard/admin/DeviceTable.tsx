@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { Smartphone, Apple, CheckCircle2, Lock, XCircle, Search, Filter, RefreshCw, X, ChevronDown, ChevronUp, FileText, Unlock, Loader2, Edit2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
+import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 import type { Customer } from '@/types';
 import type { DeviceWithCustomer } from '@/app/dashboard/admin/devices/page';

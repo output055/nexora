@@ -194,8 +194,8 @@ export default function CustomerDashboard() {
                 <CreditCard size={100} />
               </div>
               <p className="text-slate-400 text-sm font-medium mb-2">Remaining Balance</p>
-              <h2 className="text-4xl font-bold text-white tabular-nums tracking-tight">
-                <span className="text-2xl text-slate-500 mr-1">GH₵</span>
+              <h2 className="text-3xl sm:text-4xl font-bold text-white tabular-nums tracking-tight truncate" title={`GH₵${device.remaining_balance.toLocaleString()}`}>
+                <span className="text-xl sm:text-2xl text-slate-500 mr-1">GH₵</span>
                 {device.remaining_balance.toLocaleString()}
               </h2>
               <div className="mt-4 flex items-center gap-2 text-xs font-medium text-slate-500 bg-white/5 inline-flex px-3 py-1.5 rounded-xl">
@@ -209,7 +209,7 @@ export default function CustomerDashboard() {
                 <CalendarDays size={100} />
               </div>
               <p className="text-slate-400 text-sm font-medium mb-2">Next Payment Due</p>
-              <h2 className="text-2xl font-bold text-white tabular-nums tracking-tight mb-1">
+              <h2 className="text-xl sm:text-2xl font-bold text-white tabular-nums tracking-tight mb-1 truncate">
                 {device.next_payment_date ? formatDate(device.next_payment_date) : 'N/A'}
               </h2>
               <p className="text-blue-400 font-semibold mb-4">

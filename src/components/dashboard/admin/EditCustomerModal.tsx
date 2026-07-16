@@ -32,7 +32,7 @@ export function EditCustomerModal({ customer, onClose, onSuccess }: EditCustomer
     e.preventDefault();
     setLoading(true);
 
-    const { success, data, error } = await updateCustomerAction(customer.id, formData);
+    const { success, data, error } = await updateCustomerAction(customer.id, formData as Partial<Customer>);
     
     if (success && data) {
       toast.success('Customer updated successfully');

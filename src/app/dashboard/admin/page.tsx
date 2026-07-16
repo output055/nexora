@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -22,14 +22,20 @@ import {
 import { StatsCard } from '@/components/dashboard/admin/StatsCard';
 import { CustomerTable } from '@/components/dashboard/admin/CustomerTable';
 import { AuditLogStream } from '@/components/dashboard/admin/AuditLogStream';
-import { mockDashboardStats, collectionsChartData } from '@/lib/mock-data';
 import type { Customer } from '@/types';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 
 export default function AdminDashboard() {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [stats, setStats] = useState<DashboardStats & { collectionsLastMonth?: number }>(mockDashboardStats);
-  const [chartData, setChartData] = useState(collectionsChartData);
+  const [stats, setStats] = useState<any>({
+    totalCapitalDeployed: 0,
+    activeAccounts: 0,
+    overdueAccounts: 0,
+    collectionsThisMonth: 0,
+    collectionsLastMonth: 0,
+    overdueRate: 0,
+  });
+  const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -63,7 +69,7 @@ export default function AdminDashboard() {
       let collectionsThisMonth = 0;
       let collectionsLastMonth = 0;
       const now = new Date();
-      const newChartData = [...collectionsChartData];
+      const newChartData = [];
 
       if (paymentsData) {
         // Calculate collections this month and last month
@@ -98,16 +104,17 @@ export default function AdminDashboard() {
             return sum;
           }, 0);
 
-          newChartData[5 - i] = {
-            ...newChartData[5 - i],
+          newChartData.push({
             month: monthLabel,
+            target: 0, // Targets not dynamically set from DB yet
             collected,
-          };
+          });
         }
+        // Reverse because we built it backwards or just build it directly in order?
+        // Wait, loop is 5 to 0, meaning oldest month first. So pushing is correct for chronological order.
       }
 
       setStats({
-        ...mockDashboardStats,
         totalCapitalDeployed,
         activeAccounts,
         overdueAccounts,
@@ -210,7 +217,7 @@ export default function AdminDashboard() {
         </div>
         <div className="h-[220px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} barGap={6}>
+            <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
               <XAxis
                 dataKey="month"
@@ -234,11 +241,25 @@ export default function AdminDashboard() {
                   fontSize: '13px',
                 }}
                 formatter={(value: number) => [`GH₵${value.toLocaleString()}`, '']}
-                cursor={{ fill: 'rgba(255,255,255,0.02)' }}
+                cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1, strokeDasharray: '3 3' }}
               />
-              <Bar dataKey="target" fill="rgba(255,255,255,0.08)" radius={[4, 4, 4, 4]} barSize={32} />
-              <Bar dataKey="collected" fill="#3B82F6" radius={[4, 4, 4, 4]} barSize={32} />
-            </BarChart>
+              <Line 
+                type="monotone" 
+                dataKey="target" 
+                stroke="rgba(255,255,255,0.3)" 
+                strokeWidth={2} 
+                dot={false} 
+                strokeDasharray="5 5" 
+              />
+              <Line 
+                type="monotone" 
+                dataKey="collected" 
+                stroke="#3B82F6" 
+                strokeWidth={3} 
+                dot={{ r: 4, fill: "#3B82F6", strokeWidth: 0 }} 
+                activeDot={{ r: 6, fill: "#3B82F6", stroke: "rgba(59,130,246,0.3)", strokeWidth: 4 }} 
+              />
+            </LineChart>
           </ResponsiveContainer>
         </div>
       </motion.div>

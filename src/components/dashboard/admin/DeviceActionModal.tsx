@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Loader2, Smartphone, ShieldAlert, AlertTriangle, Check, Terminal, LayoutGrid } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
+import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 
 interface DeviceActionModalProps {

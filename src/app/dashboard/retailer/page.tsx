@@ -153,7 +153,7 @@ export default function RetailerPage() {
       return 0;
     });
 
-  const handleSelectCustomer = (c: Customer) => {
+  const handleSelectCustomer = (c: MappedCustomer) => {
     setSelected(c);
     setQuery('');
     setSuccessTx(null);
@@ -180,8 +180,8 @@ export default function RetailerPage() {
 
         const { customer: updatedCustomer, payment, unlock } = result.data;
 
-        setCustomers((prev) => prev.map((c) => (c.id === selected.id ? updatedCustomer : c)));
-        setSelected(updatedCustomer);
+        setCustomers((prev) => prev.map((c) => (c.id === selected.id ? { ...c, ...updatedCustomer } : c)));
+        setSelected({ ...selected, ...updatedCustomer });
         setSuccessTx({ amount: payment.amount, wasCleared: payment.wasCleared });
         reset();
 
@@ -374,7 +374,7 @@ export default function RetailerPage() {
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <p className="text-xs text-slate-500">Outstanding Balance</p>
-                  <p className="text-3xl font-bold text-white tabular-nums mt-0.5">
+                  <p className="text-2xl sm:text-3xl font-bold text-white tabular-nums mt-0.5 truncate" title={`GH₵${(selected.remaining_balance || 0).toLocaleString()}`}>
                     GH₵{(selected.remaining_balance || 0).toLocaleString()}
                   </p>
                 </div>

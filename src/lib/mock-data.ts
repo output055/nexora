@@ -52,7 +52,7 @@ export const mockRoles: RoleWithPermissions[] = [
 ];
 
 // ─── Mock Customers ────────────────────────────────────────────────────────────
-export const mockCustomers: Customer[] = [
+export const mockCustomers: any[] = [
   {
     id: 'c1',
     full_name: 'Emeka Okafor',

@@ -212,7 +212,7 @@ export default function AdminBillingPage() {
           <div className="border-t border-white/10 pt-4 mb-6">
             <div className="flex justify-between items-end">
               <span className="text-slate-300 font-medium">Total Due</span>
-              <span className="text-3xl font-bold text-white tracking-tight">${totalCostUSD.toFixed(2)}</span>
+              <span className="text-2xl sm:text-3xl font-bold text-white tracking-tight truncate" title={`$${totalCostUSD.toFixed(2)}`}>${totalCostUSD.toFixed(2)}</span>
             </div>
             <p className="text-right text-xs text-slate-500 mt-1">Processed securely via Paystack</p>
           </div>
