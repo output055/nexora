@@ -18,7 +18,7 @@ These credentials are used to connect to your Miradore Mobile Device Management 
 *   **`MIRADORE_API_KEY`**
     *   **Function:** The authentication token used to communicate with the Miradore API. It is sent as a Bearer token in the `Authorization` header to fetch device identifiers, assign users, and trigger actions (like locking/unlocking devices).
 *   **`MIRADORE_SITE_NAME`**
-    *   **Function:** The specific tenant name of your Miradore instance (e.g., `actechns`). It is used to construct the correct API endpoint URL for Miradore.
+    *   **Function:** The specific tenant name of your Miradore instance (e.g., `<YOUR_SITE_NAME>`). It is used to construct the correct API endpoint URL for Miradore.
 
 ## Application Configuration
 Miscellaneous configuration variables for the application behavior.

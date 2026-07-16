@@ -241,8 +241,8 @@ GET /api/v2/Device?$orderby=enrollmentDate desc
 8. **iOS LostMode body fields** (camelCase, per v2 schema):
    ```json
    {
-     "message": "Payment overdue. Call 0553682228.",
-     "phoneNumber": "0553682228",
+     "message": "Payment overdue. Call <YOUR_PHONE_NUMBER>.",
+     "phoneNumber": "<YOUR_PHONE_NUMBER>",
      "footnote": "Contact your retailer to unlock.",
      "enableLocationTracking": false
    }

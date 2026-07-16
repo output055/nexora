@@ -92,9 +92,9 @@
     "last_contact_time": "1784044028927",
     "platform_type_id": "1",
     "user": {
-      "user_email": "actechns@gmail.com",
+      "user_email": "<YOUR_SITE_NAME>@gmail.com",
       "user_id": "224696000000134003",
-      "user_name": "actechns@gmail.com"
+      "user_name": "<YOUR_SITE_NAME>@gmail.com"
     },
     "device_capacity": "128.0"
   },
