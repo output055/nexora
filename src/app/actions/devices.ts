@@ -10,6 +10,7 @@ import {
   getDeviceFileVault,
   fetchManageEngineDevices,
   getDeviceLocationWithAddress,
+  getDeviceDetails,
   getDeviceAlerts,
   sendDeviceCommand
 } from '@/lib/manageengine';
@@ -21,6 +22,18 @@ import { getAllSystemSettings } from './settings';
 export async function getDevicesAction() {
   try {
     const data = await fetchManageEngineDevices();
+    return { success: true, data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get details of a specific device
+ */
+export async function getDeviceDetailsAction(deviceId: string) {
+  try {
+    const data = await getDeviceDetails(deviceId);
     return { success: true, data };
   } catch (error: any) {
     return { success: false, error: error.message };

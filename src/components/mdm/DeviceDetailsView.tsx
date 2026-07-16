@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Search, ShieldAlert, Smartphone, AppWindow, FileText, AlertCircle, MapPin, Activity, ChevronDown, Lock, RefreshCw, Power, Trash2, Shield, Key, LayoutGrid } from 'lucide-react';
 import { toast } from 'sonner';
@@ -11,7 +11,7 @@ import { RestrictionsTab } from './RestrictionsTab';
 import { AlertsTab } from './AlertsTab';
 import { AuditLogsTab } from './AuditLogsTab';
 
-import { executeDeviceCommandAction } from '@/app/actions/devices';
+import { executeDeviceCommandAction, getDeviceDetailsAction } from '@/app/actions/devices';
 import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 
 interface DeviceDetailsViewProps {
@@ -31,11 +31,21 @@ const tabs: { id: TabType; label: string }[] = [
   { id: 'Audit Logs', label: 'Audit Logs' },
 ];
 
-export function DeviceDetailsView({ device, location, onBack }: DeviceDetailsViewProps) {
+export function DeviceDetailsView({ device: initialDevice, location, onBack }: DeviceDetailsViewProps) {
+  const [device, setDevice] = useState<any>(initialDevice);
   const [activeTab, setActiveTab] = useState<TabType>('Summary');
   const [actionsOpen, setActionsOpen] = useState(false);
   const [lockPin, setLockPin] = useState<string | null>(null);
   const [isCommanding, setIsCommanding] = useState(false);
+  useEffect(() => {
+    const fetchDetails = async () => {
+      const res = await getDeviceDetailsAction(initialDevice.device_id);
+      if (res.success && res.data) {
+        setDevice((prev: any) => ({ ...prev, ...res.data }));
+      }
+    };
+    fetchDetails();
+  }, [initialDevice.device_id]);
   
   // Security States initialized from device data
   const [isLostMode, setIsLostMode] = useState(

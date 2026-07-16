@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Smartphone, ShieldCheck, Cpu, Hash, Clock, Battery, Wifi, Activity } from 'lucide-react';
+import { Smartphone, ShieldCheck, Cpu, Hash, Clock, Battery, Wifi, Activity, Phone } from 'lucide-react';
 import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 
 interface SummaryTabProps {
@@ -58,9 +58,15 @@ export function SummaryTab({ device }: SummaryTabProps) {
               <span className="text-slate-400 flex items-center gap-2"><Battery size={16}/> Battery Level</span>
               <span className="text-slate-200 font-medium">{device.battery_level ? `${device.battery_level}%` : 'N/A'}</span>
             </div>
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center pb-4 border-b border-white/5">
               <span className="text-slate-400 flex items-center gap-2"><Wifi size={16}/> Network</span>
               <span className="text-slate-200 font-medium">{device.cellular_technology || 'Wi-Fi'}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400 flex items-center gap-2"><Phone size={16}/> Phone Number</span>
+              <span className="text-slate-200 font-medium">
+                {device.phone_number || device.network_info?.phone_number || device.sims?.[0]?.phone_number || 'N/A'}
+              </span>
             </div>
           </div>
         </div>
@@ -76,7 +82,9 @@ export function SummaryTab({ device }: SummaryTabProps) {
             <div className="flex justify-between items-center pb-4 border-b border-white/5">
               <span className="text-slate-400">Added On</span>
               <span className="text-slate-200 text-sm">
-                {device.added_time ? new Date(device.added_time).toLocaleDateString() : 'Unknown'}
+                {(device.added_time || device.registered_time || device.enrolled_time || device.managed_status_time) 
+                  ? new Date(Number(device.added_time || device.registered_time || device.enrolled_time || device.managed_status_time)).toLocaleDateString() 
+                  : 'Unknown'}
               </span>
             </div>
             <div className="flex justify-between items-center">

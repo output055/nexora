@@ -212,6 +212,34 @@ export async function fetchManageEngineProfiles(): Promise<any[]> {
 }
 
 /**
+ * Fetch detailed info of a specific managed device
+ * GET /api/v1/mdm/devices/{device_id}
+ */
+export async function getDeviceDetails(deviceId: string): Promise<any> {
+  try {
+    const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
+    const url = `${baseUrl}/api/v1/mdm/devices/${deviceId}`;
+    
+    const response = await manageEngineFetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`ManageEngine API responded with status ${response.status}: ${errorText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error(`Error fetching details for device ${deviceId}:`, error);
+    throw error;
+  }
+}
+
+/**
  * Fetch locations of a specific managed device
  * GET /api/v1/mdm/devices/{device_id}/locations
  */
