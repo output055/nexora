@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 
 // Fix for default marker icon issues in Leaflet with Webpack/Next.js
 const customIcon = new L.Icon({
@@ -96,7 +97,7 @@ export default function LeafletMap({ locations, devices, onMarkerClick, showHist
           >
             <Popup>
               <div className="font-medium text-slate-800">
-                {device?.device_name || 'Unknown Device'}
+                {device ? (getHumanReadableDeviceName(device.product_name) || getHumanReadableDeviceName(device.model_name) || getHumanReadableDeviceName(device.model) || device.product_name || device.model_name || device.model || device.device_name || 'Unknown Device') : 'Unknown Device'}
               </div>
               <div className="text-xs text-slate-500">
                 Click to view details

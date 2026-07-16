@@ -11,6 +11,7 @@ import {
   getDeviceLocationAction
 } from '@/app/actions/devices';
 import { toast } from 'sonner';
+import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 
 interface DeviceMgmtModalProps {
   device: any;
@@ -116,8 +117,12 @@ export function DeviceMgmtModal({ device, location, onClose }: DeviceMgmtModalPr
               <Smartphone className="text-blue-400" size={20} />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white tracking-tight">{device.device_name || 'Unknown Device'}</h2>
-              <p className="text-sm text-slate-400">{device.model} • {device.platform_type}</p>
+              <h2 className="text-lg font-semibold text-white tracking-tight">
+                {getHumanReadableDeviceName(device.product_name) || getHumanReadableDeviceName(device.model_name) || getHumanReadableDeviceName(device.model) || device.product_name || device.model_name || device.model || device.device_name || 'Unknown Device'}
+              </h2>
+              <p className="text-sm text-slate-400">
+                {getHumanReadableDeviceName(device.product_name) || getHumanReadableDeviceName(device.model_name) || getHumanReadableDeviceName(device.model) || device.product_name || device.model_name || device.model} • {device.platform_type}
+              </p>
             </div>
           </div>
           <button

@@ -3,8 +3,10 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { Search, Lock, Unlock, Loader2, Apple, Smartphone, ChevronUp, ChevronDown, X, Edit2, Trash2, CheckCircle2 } from 'lucide-react';
+import { Smartphone, Apple, CheckCircle2, Lock, XCircle, Search, Filter, RefreshCw, X, ChevronDown, ChevronUp, FileText, Unlock, Loader2, Edit2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
+import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 import type { Customer } from '@/types';
 import type { DeviceWithCustomer } from '@/app/dashboard/admin/devices/page';
 import { usePagination } from '@/lib/hooks/usePagination';
@@ -104,7 +106,7 @@ export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
             <input
               id="device-search"
               type="text"
-              placeholder="Search by owner, device model, Scalefusion ID, or phone…"
+              placeholder="Search by owner, device model, MDM Device ID, or phone…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/8 text-white placeholder:text-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
@@ -219,7 +221,7 @@ export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
                     className="border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors"
                   >
                     <td className="px-4 py-3.5">
-                      <p className="text-sm font-semibold text-white">{d.device_model}</p>
+                      <p className="text-sm font-semibold text-white">{getHumanReadableDeviceName(d.device_model) || d.device_model}</p>
                       <p className="text-xs text-slate-500 mt-0.5">ID: {d.mdm_device_id}</p>
                     </td>
                     <td className="px-4 py-3.5">

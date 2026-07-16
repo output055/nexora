@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Smartphone, ShieldCheck, Cpu, Hash, Clock, Battery, Wifi, Activity } from 'lucide-react';
+import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 
 interface SummaryTabProps {
   device: any;
@@ -43,7 +44,9 @@ export function SummaryTab({ device }: SummaryTabProps) {
           <div className="space-y-4">
             <div className="flex justify-between items-center pb-4 border-b border-white/5">
               <span className="text-slate-400 flex items-center gap-2"><Smartphone size={16}/> Device Name</span>
-              <span className="text-slate-200 font-medium">{device.device_name || 'N/A'}</span>
+              <span className="text-slate-200 font-medium">
+                {getHumanReadableDeviceName(device.product_name) || getHumanReadableDeviceName(device.model_name) || getHumanReadableDeviceName(device.model) || device.product_name || device.model_name || device.model || device.device_name || 'N/A'}
+              </span>
             </div>
             <div className="flex justify-between items-center pb-4 border-b border-white/5">
               <span className="text-slate-400 flex items-center gap-2"><Clock size={16}/> Enrollment Status</span>

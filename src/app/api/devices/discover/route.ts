@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       .map((d: any) => ({
         id: String(d.device_id),
         serial: d.serial_number || 'N/A',
-        model: d.model || d.product_name || 'Unknown Device',
+        model: d.product_name || d.model_name || d.model || 'Unknown Device',
         imei: d.imei || '',
         os_version: d.os_version || '',
       }))

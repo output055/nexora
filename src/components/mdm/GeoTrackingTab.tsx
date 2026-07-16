@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { RefreshCw, Smartphone, MapPin, Trash2, ChevronUp, Loader2 } from 'lucide-react';
 import { getDeviceLocationAction, requestDeviceLocationUpdateAction } from '@/app/actions/devices';
+import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 import { toast } from 'sonner';
 import dynamic from 'next/dynamic';
 
@@ -153,7 +154,7 @@ export function GeoTrackingTab({ device, initialLocation }: GeoTrackingTabProps)
           <div className="flex items-center gap-3">
             <Smartphone className="text-slate-600 dark:text-slate-400" size={20} />
             <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm truncate max-w-[200px]">
-              {device.device_name || 'Unknown Device'}
+              {getHumanReadableDeviceName(device.product_name) || getHumanReadableDeviceName(device.model_name) || getHumanReadableDeviceName(device.model) || device.product_name || device.model_name || device.model || device.device_name || 'Unknown Device'}
             </h3>
           </div>
           <div className="flex items-center gap-2">

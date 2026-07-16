@@ -12,6 +12,7 @@ import { AlertsTab } from './AlertsTab';
 import { AuditLogsTab } from './AuditLogsTab';
 
 import { executeDeviceCommandAction } from '@/app/actions/devices';
+import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 
 interface DeviceDetailsViewProps {
   device: any;
@@ -122,11 +123,13 @@ export function DeviceDetailsView({ device, location, onBack }: DeviceDetailsVie
               <Smartphone className="text-blue-400" size={24} />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white tracking-tight">{device.device_name || 'Unnamed Device'}</h2>
+              <h2 className="text-2xl font-bold text-white tracking-tight">
+                {getHumanReadableDeviceName(device.product_name) || getHumanReadableDeviceName(device.model_name) || getHumanReadableDeviceName(device.model) || device.product_name || device.model_name || device.model || device.device_name || 'Unnamed Device'}
+              </h2>
               <div className="flex items-center gap-2 text-sm text-slate-400 mt-0.5">
                 <span className="flex items-center gap-1"><ShieldAlert size={14}/> {device.platform_type || 'Unknown OS'}</span>
                 <span>•</span>
-                <span className="flex items-center gap-1"><AppWindow size={14}/> {device.model || 'Unknown Model'}</span>
+                <span className="flex items-center gap-1"><AppWindow size={14}/> {getHumanReadableDeviceName(device.product_name) || getHumanReadableDeviceName(device.model_name) || getHumanReadableDeviceName(device.model) || device.product_name || device.model_name || device.model || 'Unknown Model'}</span>
               </div>
             </div>
             

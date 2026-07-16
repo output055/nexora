@@ -49,12 +49,7 @@ const adminNavItems: NavItem[] = [
     icon: <Smartphone size={18} />,
     permission: 'manage_devices',
   },
-  {
-    label: 'Enrolled devices',
-    href: '/dashboard/admin/mdm',
-    icon: <Map size={18} />,
-    permission: 'manage_devices',
-  },
+ 
   {
     label: 'Customer Directory',
     href: '/dashboard/admin/customers',
@@ -71,6 +66,12 @@ const adminNavItems: NavItem[] = [
     label: 'Administration',
     icon: <Shield size={18} />,
     subItems: [
+      {
+        label: 'MDM',
+        href: '/dashboard/admin/mdm',
+        icon: <Map size={18} />,
+        permission: 'manage_devices',
+      },
       { label: 'System Users', href: '/dashboard/admin/users', icon: <Users size={16} />, permission: 'manage_roles' },
       { label: 'Roles & Permissions', href: '/dashboard/admin/settings', icon: <ShieldCheck size={16} />, permission: 'manage_roles' },
       { label: 'System Settings', href: '/dashboard/admin/system-settings', icon: <Settings size={16} />, permission: 'view_settings' },

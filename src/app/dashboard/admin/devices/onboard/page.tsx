@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertCircle,
   Apple,
@@ -18,8 +18,10 @@ import {
   RefreshCw,
   Save,
   Smartphone,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 import type { Customer, OsPlatform, PaymentCycle, ResidentialStatus } from '@/types';
 
 type Workflow = 'Android' | 'iOS';
@@ -561,23 +563,24 @@ function QrEnrollmentStep({
   confirmed: boolean;
   onConfirmChange: (value: boolean) => void;
 }) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 md:grid-cols-[180px_minmax(0,1fr)]">
-        <div className="rounded-xl border border-emerald-500/20 bg-white p-3">
-          {androidQrImage ? (
-            <div
-              role="img"
-              aria-label="Android Enterprise enrollment QR"
-              className="aspect-square w-full bg-contain bg-center bg-no-repeat"
-              style={{ backgroundImage: `url(${androidQrImage})` }}
-            />
-          ) : (
-            <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-lg bg-slate-50 text-slate-600">
-              <QrCode size={44} />
-              <span className="text-center text-xs font-semibold uppercase">QR not configured</span>
-            </div>
-          )}
+      <div className="grid gap-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 md:grid-cols-[260px_minmax(0,1fr)]">
+        <div 
+          className="rounded-xl border border-emerald-500/20 bg-white p-3 cursor-pointer hover:ring-2 hover:ring-emerald-500/50 transition-all group relative"
+          onClick={() => setIsModalOpen(true)}
+        >
+          <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
+            <span className="bg-black/80 text-white text-xs font-semibold px-2 py-1 rounded-md">Click to enlarge</span>
+          </div>
+          <div
+            role="img"
+            aria-label="Android Enterprise enrollment QR"
+            className="aspect-square w-full bg-contain bg-center bg-no-repeat"
+            style={{ backgroundImage: `url('/androidqrcode.png')` }}
+          />
         </div>
         <div className="flex flex-col justify-center">
           <h3 className="text-sm font-semibold text-white">Android Enterprise Enrollment</h3>
@@ -589,6 +592,39 @@ function QrEnrollmentStep({
           )}
         </div>
       </div>
+
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsModalOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative z-10 w-full max-w-2xl rounded-3xl bg-white p-8 shadow-2xl"
+            >
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="absolute right-4 top-4 rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors"
+              >
+                <X size={24} />
+              </button>
+              <div
+                role="img"
+                aria-label="Android Enterprise enrollment QR large"
+                className="aspect-square w-full bg-contain bg-center bg-no-repeat"
+                style={{ backgroundImage: `url('/androidqrcode.png')` }}
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <label
         htmlFor="qr-confirmed"
@@ -694,26 +730,33 @@ function DeviceStep({
         </select>
         */}
 
-        <select
-          id={`${workflow.toLowerCase()}-device`}
-          value={selectedDeviceId}
-          onChange={(event) => onSelectDevice(event.target.value)}
-          disabled={fetchingDevices}
-          className="w-full rounded-xl border border-white/10 bg-[#0D1526] px-3 py-3 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
-        >
-          <option value="">Select discovered hardware</option>
-          {devices.map((device) => (
-            <option key={device.id} value={device.id}>
-              {device.serial} - {device.model}
-            </option>
-          ))}
-        </select>
+        {fetchingDevices ? (
+          <div className="w-full flex items-center justify-center gap-3 rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-6 text-sm text-blue-400">
+            <Loader2 size={20} className="animate-spin" />
+            <span>Fetching discovered devices from MDM Server...</span>
+          </div>
+        ) : (
+          <select
+            id={`${workflow.toLowerCase()}-device`}
+            value={selectedDeviceId}
+            onChange={(event) => onSelectDevice(event.target.value)}
+            disabled={fetchingDevices}
+            className="w-full rounded-xl border border-white/10 bg-[#0D1526] px-3 py-3 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-blue-500/40"
+          >
+            <option value="">Select discovered hardware</option>
+            {devices.map((device) => (
+              <option key={device.id} value={device.id}>
+                {device.serial} - {getHumanReadableDeviceName(device.model) || device.model}
+              </option>
+            ))}
+          </select>
+        )}
 
         {selectedDevice ? (
           <div className="rounded-xl border border-white/8 bg-white/5 p-3">
-            <p className="text-sm font-semibold text-white">{selectedDevice.model}</p>
+            <p className="text-sm font-semibold text-white">{getHumanReadableDeviceName(selectedDevice.model) || selectedDevice.model}</p>
             <p className="mt-1 text-xs text-slate-500">Serial: {selectedDevice.serial}</p>
-            <p className="mt-1 text-xs text-slate-500">Scalefusion ID: {selectedDevice.id}</p>
+            <p className="mt-1 text-xs text-slate-500">MDM Device ID: {selectedDevice.id}</p>
           </div>
         ) : (
           <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
@@ -725,7 +768,7 @@ function DeviceStep({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Input id={`${workflow}-model`} label="Device Model" value={form.device_model} onChange={(value) => onChange('device_model', value)} disabled={Boolean(selectedDevice)} required />
-        <Input id={`${workflow}-device-id`} label="Scalefusion Device ID" value={form.mdm_device_id} onChange={(value) => onChange('mdm_device_id', value)} disabled={Boolean(selectedDevice)} required />
+        <Input id={`${workflow}-device-id`} label="MDM Device ID" value={form.mdm_device_id} onChange={(value) => onChange('mdm_device_id', value)} disabled={Boolean(selectedDevice)} required />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

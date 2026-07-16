@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Loader2, Smartphone, ShieldAlert, AlertTriangle, Check, Terminal, LayoutGrid } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
+import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 
 interface DeviceActionModalProps {
   isOpen: boolean;
@@ -172,7 +174,7 @@ export function DeviceActionModal({ isOpen, onClose, deviceId, deviceName }: Dev
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                 <Loader2 size={32} className="animate-spin mb-4" />
-                <p>Connecting to Scalefusion...</p>
+                <p>Connecting to MDM Server...</p>
               </div>
             ) : error ? (
               <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 flex items-start gap-3">
@@ -183,7 +185,7 @@ export function DeviceActionModal({ isOpen, onClose, deviceId, deviceName }: Dev
               <>
                 {/* Device Info */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  <InfoCard label="Model" value={details.model || 'Unknown'} />
+                  <InfoCard label="Model" value={getHumanReadableDeviceName(details.model) || details.model || 'Unknown'} />
                   <InfoCard label="Make" value={details.make || 'Unknown'} />
                   <InfoCard label="OS" value={`${details.os_type || 'N/A'} ${details.os_version || ''}`} />
                   <InfoCard label="Serial No" value={details.serial_no || 'Unknown'} />

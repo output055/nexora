@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Smartphone, ShieldCheck, Cpu, Hash, Clock, ChevronRight } from 'lucide-react';
+import { Search, Smartphone, ShieldCheck, Cpu, Hash, Clock, ChevronRight, User } from 'lucide-react';
+import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 
 interface EnrolledDevicesTableProps {
   devices: any[];
@@ -12,11 +13,19 @@ interface EnrolledDevicesTableProps {
 export function EnrolledDevicesTable({ devices, onDeviceSelect }: EnrolledDevicesTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredDevices = devices.filter(d => 
-    d.device_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    d.serial_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    d.model?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredDevices = devices.filter(d => {
+    const mappedModelName = getHumanReadableDeviceName(d.product_name) || 
+                            getHumanReadableDeviceName(d.model_name) || 
+                            getHumanReadableDeviceName(d.model) || 
+                            '';
+    
+    return d.device_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+           d.serial_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           d.model?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           d.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           mappedModelName.toLowerCase().includes(searchTerm.toLowerCase());
+  });
+  console.log("DEVICE DATA SAMPLE:", devices[0]);
 
   return (
     <motion.div 
@@ -60,7 +69,7 @@ export function EnrolledDevicesTable({ devices, onDeviceSelect }: EnrolledDevice
                 Platform
               </th>
               <th className="px-6 py-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-white/10 whitespace-nowrap hidden md:table-cell">
-                Model
+                Assigned User
               </th>
               <th className="px-6 py-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-white/10 whitespace-nowrap hidden lg:table-cell">
                 OS Version
@@ -74,7 +83,17 @@ export function EnrolledDevicesTable({ devices, onDeviceSelect }: EnrolledDevice
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-            {filteredDevices.map((device, index) => (
+            {filteredDevices.map((device, index) => {
+              const mappedModelName = getHumanReadableDeviceName(device.product_name) || 
+                                      getHumanReadableDeviceName(device.model_name) || 
+                                      getHumanReadableDeviceName(device.model) || 
+                                      device.product_name || 
+                                      device.model_name || 
+                                      device.model;
+                                      
+              const displayName = mappedModelName || device.device_name || 'Unnamed Device';
+              
+              return (
               <tr 
                 key={device.device_id || index}
                 onClick={() => onDeviceSelect(device)}
@@ -87,10 +106,10 @@ export function EnrolledDevicesTable({ devices, onDeviceSelect }: EnrolledDevice
                     </div>
                     <div>
                       <div className="font-medium text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                        {device.device_name || 'Unnamed Device'}
+                        {displayName}
                       </div>
                       <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 sm:hidden">
-                        {device.platform_type} • {device.model}
+                        {device.platform_type} • {mappedModelName}
                       </div>
                     </div>
                   </div>
@@ -103,8 +122,10 @@ export function EnrolledDevicesTable({ devices, onDeviceSelect }: EnrolledDevice
                 </td>
                 <td className="px-6 py-4 hidden md:table-cell">
                   <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                    <Cpu size={16} className="text-slate-400" />
-                    {device.model || 'Unknown'}
+                    <User size={16} className="text-slate-400" />
+                    <span className="truncate max-w-[120px] lg:max-w-[160px]" title={device.user?.user_name || device.user?.user_email || 'Unassigned'}>
+                      {device.user?.user_name || device.user?.user_email || 'Unassigned'}
+                    </span>
                   </div>
                 </td>
                 <td className="px-6 py-4 hidden lg:table-cell">
@@ -130,7 +151,8 @@ export function EnrolledDevicesTable({ devices, onDeviceSelect }: EnrolledDevice
                   </button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {filteredDevices.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-transparent">
