@@ -43,7 +43,12 @@ export async function GET(request: Request) {
 
       if (!updateError) {
         try {
-          await sendDeviceCommand(device.mdm_device_id, lockCommand, {
+          // Map UI setting values to actual ManageEngine API command names
+          let apiCommandName = lockCommand;
+          if (lockCommand === 'LostMode') apiCommandName = 'enable_lost_mode';
+          if (lockCommand === 'DeviceLock') apiCommandName = 'lock';
+          
+          await sendDeviceCommand(device.mdm_device_id, apiCommandName, {
             lock_message: lostModeMessage,
             phone_number: lostModePhone,
             passcode: kioskPin // Assuming 'passcode' or 'pin' is the key for Kiosk mode in ME

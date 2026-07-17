@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseAdmin } from '@/lib/supabase-server';
+import { createServiceRoleSupabaseClient } from '@/lib/supabase';
 import { sendSMS } from '@/lib/sms';
 
 export async function GET(request: Request) {
@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const adminClient = createSupabaseAdmin();
+    const adminClient = createServiceRoleSupabaseClient();
     
     // Fetch all active devices that still owe money
     const { data: devices, error } = await adminClient
