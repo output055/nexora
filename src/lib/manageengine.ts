@@ -160,6 +160,7 @@ export async function fetchManageEngineDevices(): Promise<any> {
 
     const response = await manageEngineFetch(url, {
       method: 'GET',
+      cache: 'no-store',
       headers: {
         'Accept': 'application/json',
       }
