@@ -11,6 +11,7 @@ export interface LogPaymentInput {
   amount: number;
   paymentMethod: 'cash' | 'paystack_momo' | 'bank_transfer';
   transactionReference?: string;
+  isDownPayment?: boolean;
 }
 
 export async function logPayment(input: LogPaymentInput): Promise<{ success: boolean; error?: string }> {
@@ -62,12 +63,12 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
       return { success: false, error: insertError.message };
     }
 
-      // Calculate next payment date advancement
+      // Calculate next payment date advancement (Skip if down payment)
       let nextDate = deviceBeforePayment?.next_payment_date 
         ? new Date(deviceBeforePayment.next_payment_date) 
         : new Date();
         
-      if (deviceBeforePayment && deviceBeforePayment.payment_cycle_amount > 0) {
+      if (!input.isDownPayment && deviceBeforePayment && deviceBeforePayment.payment_cycle_amount > 0) {
         const cust: any = deviceBeforePayment.customers;
         const cycle = (Array.isArray(cust) ? cust[0]?.payment_cycle : cust?.payment_cycle) || 'monthly';
         const ratio = input.amount / deviceBeforePayment.payment_cycle_amount;

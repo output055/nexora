@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, User, Smartphone, CreditCard, Calendar, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 import { getCalculatedPaymentStatus } from '@/lib/utils';
+import { RecordPaymentButton } from '@/components/dashboard/admin/RecordPaymentButton';
+import { getSystemSetting } from '@/app/actions/settings';
 
 export default async function CustomerDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,6 +32,8 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
   const adminClient = createServiceRoleSupabaseClient();
   const { data: usersData } = await adminClient.auth.admin.listUsers();
   const usersMap = new Map(usersData?.users.map((u) => [u.id, u.user_metadata?.full_name || u.email]) || []);
+
+  const adminEmail = await getSystemSetting('admin_paystack_email') || 'admin@nexora.com';
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8">
@@ -131,6 +135,20 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
                     </p>
                   </div>
                 </div>
+              </div>
+
+              <div className="mt-4">
+                <RecordPaymentButton 
+                  customerId={customer.id} 
+                  deviceId={primaryDevice.id} 
+                  isDownPayment={payments.length === 0 && Number(primaryDevice.remaining_balance) >= Number(primaryDevice.total_owed) * 0.9} 
+                  defaultAmount={
+                    (payments.length === 0 && Number(primaryDevice.remaining_balance) >= Number(primaryDevice.total_owed) * 0.9)
+                      ? (primaryDevice.down_payment ? Number(primaryDevice.down_payment) : 0)
+                      : (primaryDevice.payment_cycle_amount ? Number(primaryDevice.payment_cycle_amount) : 0)
+                  }
+                  adminEmail={adminEmail}
+                />
               </div>
             </div>
           )}

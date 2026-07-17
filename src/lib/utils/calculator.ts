@@ -4,6 +4,8 @@ export interface PaymentPlanOptions {
   cycle: 'daily' | 'weekly' | 'bi_weekly' | 'monthly';
   interestRate?: number;
   downPaymentRate?: number;
+  downPaymentType?: 'percentage' | 'fixed';
+  downPaymentFixedAmount?: number;
 }
 
 export interface PaymentPlanResult {
@@ -23,15 +25,23 @@ export function calculatePaymentPlan({
   durationMonths,
   cycle,
   interestRate = 30,
-  downPaymentRate = 40
+  downPaymentRate = 40,
+  downPaymentType = 'percentage',
+  downPaymentFixedAmount
 }: PaymentPlanOptions): PaymentPlanResult {
   // 1. Total Contract Value = Base Price + Interest Fee (e.g. 30%)
   const totalContractValue = basePrice * (1 + interestRate / 100);
   
-  // 2. Down Payment = Percentage (e.g. 40%) of Total Contract Value
-  const downPayment = totalContractValue * (downPaymentRate / 100);
+  // 2. Default Down Payment Percentage
+  const defaultDownPayment = totalContractValue * (downPaymentRate / 100);
   
-  // 3. Remaining Balance
+  // 3. Final Down Payment (Fixed amount shouldn't be less than default, but calculator just calculates what it's told. Validation should happen before.)
+  let downPayment = defaultDownPayment;
+  if (downPaymentType === 'fixed' && downPaymentFixedAmount !== undefined) {
+    downPayment = Math.max(downPaymentFixedAmount, defaultDownPayment);
+  }
+  
+  // 4. Remaining Balance
   const remainingBalance = totalContractValue - downPayment;
   
   // 4. Time Calculation

@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertCircle,
@@ -22,6 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
+import { getSystemSetting } from '@/app/actions/settings';
 import type { Customer, OsPlatform, PaymentCycle, ResidentialStatus } from '@/types';
 
 type Workflow = 'Android' | 'iOS';
@@ -64,6 +66,9 @@ type RegisterForm = {
   os_version: string;
   base_price: string;
   contract_duration_months: string;
+  interest_rate: string;
+  down_payment_type: 'percentage' | 'fixed';
+  down_payment_value: string;
 };
 
 type RegisterResponse = {
@@ -106,6 +111,9 @@ const emptyForm: RegisterForm = {
   os_version: '',
   base_price: '',
   contract_duration_months: '3',
+  interest_rate: '',
+  down_payment_type: 'percentage',
+  down_payment_value: '',
 };
 
 // Android gets 6 steps: QR Enrollment → Device → Identity → Contact → Location → Work
@@ -137,6 +145,7 @@ export default function DeviceOnboardingPage() {
   const [stepIndex, setStepIndex] = useState(0);
   const [androidForm, setAndroidForm] = useState<RegisterForm>(emptyForm);
   const [iosForm, setIosForm] = useState<RegisterForm>(emptyForm);
+  const router = useRouter();
 
   // Devices fetched from Miradore (filtered by platform, cross-checked against Nexora DB)
   const [androidDevices, setAndroidDevices] = useState<DiscoveredDevice[]>([]);
@@ -149,6 +158,23 @@ export default function DeviceOnboardingPage() {
   const [profiles, setProfiles] = useState<DeviceProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState('');
   const [fetchingProfiles, setFetchingProfiles] = useState(false);
+
+  const [defaultDownPaymentRate, setDefaultDownPaymentRate] = useState('40');
+
+  useEffect(() => {
+    // Fetch global default financial settings
+    Promise.all([
+      getSystemSetting('payment_interest_rate'),
+      getSystemSetting('payment_down_payment_rate')
+    ]).then(([ir, dpr]) => {
+      const defaultIr = ir || '30';
+      const defaultDpr = dpr || '40';
+      setDefaultDownPaymentRate(defaultDpr);
+      
+      setAndroidForm(prev => ({ ...prev, interest_rate: defaultIr, down_payment_value: defaultDpr }));
+      setIosForm(prev => ({ ...prev, interest_rate: defaultIr, down_payment_value: defaultDpr }));
+    });
+  }, []);
 
   useEffect(() => {
     fetchDevices();
@@ -196,6 +222,21 @@ export default function DeviceOnboardingPage() {
       if (!Number.isFinite(Number(activeForm.base_price)) || Number(activeForm.base_price) <= 0) return 'Base price must be a positive number.';
       if (!activeForm.contract_duration_months) return 'Enter the contract duration.';
       if (!Number.isFinite(Number(activeForm.contract_duration_months)) || Number(activeForm.contract_duration_months) <= 0) return 'Contract duration must be positive.';
+      
+      if (!activeForm.interest_rate) return 'Enter the interest/installation fee rate.';
+      if (!activeForm.down_payment_value) return 'Enter the down payment value.';
+      
+      if (activeForm.down_payment_type === 'fixed') {
+        const base = Number(activeForm.base_price);
+        const interest = Number(activeForm.interest_rate);
+        const defDpRate = Number(defaultDownPaymentRate);
+        const totalValue = base * (1 + interest / 100);
+        const minDp = totalValue * (defDpRate / 100);
+        
+        if (Number(activeForm.down_payment_value) < minDp) {
+          return `Fixed down payment cannot be less than the default ${defDpRate}% (GH₵ ${minDp.toFixed(2)}).`;
+        }
+      }
     }
 
     if (step === 'identity') {
@@ -275,6 +316,9 @@ export default function DeviceOnboardingPage() {
     formData.set('os_version', form.os_version);
     formData.set('base_price', form.base_price);
     formData.set('contract_duration_months', form.contract_duration_months);
+    formData.set('interest_rate', form.interest_rate);
+    formData.set('down_payment_type', form.down_payment_type);
+    formData.set('down_payment_value', form.down_payment_value);
 
     if (form.ghana_card_scan) formData.set('ghana_card_scan', form.ghana_card_scan);
 
@@ -321,6 +365,7 @@ export default function DeviceOnboardingPage() {
       setSelectedDeviceId('');
       setStepIndex(0);
       toast.success(`${(data.customer as any).device_model} registered to ${data.customer.full_name}.`);
+      router.push(`/dashboard/admin/customers/${data.customer.id}`);
     } catch (submitError) {
       toast.error(submitError instanceof Error ? submitError.message : 'Registration failed.');
     } finally {
@@ -743,9 +788,9 @@ function DeviceStep({
             disabled={fetchingDevices}
             className="w-full rounded-xl border border-white/10 bg-[#0D1526] px-3 py-3 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-blue-500/40"
           >
-            <option value="">Select discovered hardware</option>
+            <option value="" className="bg-[#0D1526]">Select discovered hardware</option>
             {devices.map((device) => (
-              <option key={device.id} value={device.id}>
+              <option key={device.id} value={device.id} className="bg-[#0D1526]">
                 {device.serial} - {getHumanReadableDeviceName(device.model) || device.model}
               </option>
             ))}
@@ -774,6 +819,15 @@ function DeviceStep({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Input id={`${workflow}-base`} label="Device Base Price (GH₵)" type="number" min="1" step="1" value={form.base_price} onChange={(value) => onChange('base_price', value)} required />
         <Input id={`${workflow}-duration`} label="Contract Duration (Months)" type="number" min="1" step="1" value={form.contract_duration_months} onChange={(value) => onChange('contract_duration_months', value)} required />
+      </div>
+
+      <div className="pt-4 border-t border-white/5 space-y-4">
+        <h4 className="text-sm font-semibold text-white">Financial Configuration</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Input id={`${workflow}-interest`} label="Interest / Fee (%)" type="number" min="0" step="0.1" value={form.interest_rate} onChange={(value) => onChange('interest_rate', value)} required />
+          <Select id={`${workflow}-dp-type`} label="Down Payment Type" value={form.down_payment_type} onChange={(value) => onChange('down_payment_type', value as any)} options={[{ value: 'percentage', label: 'Percentage (%)' }, { value: 'fixed', label: 'Fixed Amount (GH₵)' }]} />
+          <Input id={`${workflow}-dp-value`} label={form.down_payment_type === 'percentage' ? 'Down Payment (%)' : 'Down Payment Amount (GH₵)'} type="number" min="0" step="1" value={form.down_payment_value} onChange={(value) => onChange('down_payment_value', value)} required />
+        </div>
       </div>
     </div>
   );
@@ -882,9 +936,9 @@ function Select({
         required
         className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-blue-500/40"
       >
-        <option value="">Select one</option>
+        <option value="" className="bg-[#0D1526]">Select one</option>
         {options.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option key={option.value} value={option.value} className="bg-[#0D1526]">
             {option.label}
           </option>
         ))}

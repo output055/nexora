@@ -26,6 +26,9 @@ type RegisterDevicePayload = {
   os_version: string;
   base_price: number;
   contract_duration_months: number;
+  interest_rate?: number;
+  down_payment_type?: 'percentage' | 'fixed';
+  down_payment_value?: number;
   ghana_card_scan: File;
 };
 
@@ -62,6 +65,9 @@ function parseRegisterPayload(formData: FormData):
     os_version: cleanString(formData, 'os_version'),
     base_price: Number(cleanString(formData, 'base_price')),
     contract_duration_months: Number(cleanString(formData, 'contract_duration_months')),
+    interest_rate: cleanString(formData, 'interest_rate') ? Number(cleanString(formData, 'interest_rate')) : undefined,
+    down_payment_type: cleanString(formData, 'down_payment_type') as 'percentage' | 'fixed' || undefined,
+    down_payment_value: cleanString(formData, 'down_payment_value') ? Number(cleanString(formData, 'down_payment_value')) : undefined,
     ghana_card_scan: formData.get('ghana_card_scan'),
   };
 
@@ -195,15 +201,30 @@ export async function POST(request: NextRequest) {
     const interestRateStr = await getSystemSetting('payment_interest_rate');
     const downPaymentRateStr = await getSystemSetting('payment_down_payment_rate');
     
-    const interestRate = interestRateStr ? Number(interestRateStr) : 30;
-    const downPaymentRate = downPaymentRateStr ? Number(downPaymentRateStr) : 40;
+    // If the frontend provided an interest rate, use it; otherwise fallback to global setting
+    const interestRate = payload.interest_rate !== undefined ? payload.interest_rate : (interestRateStr ? Number(interestRateStr) : 30);
+    
+    // For down payment, if the frontend provided a value, we pass it depending on the type
+    let downPaymentRate = downPaymentRateStr ? Number(downPaymentRateStr) : 40;
+    let downPaymentType = payload.down_payment_type || 'percentage';
+    let downPaymentFixedAmount: number | undefined = undefined;
+
+    if (payload.down_payment_value !== undefined) {
+      if (downPaymentType === 'percentage') {
+        downPaymentRate = payload.down_payment_value;
+      } else {
+        downPaymentFixedAmount = payload.down_payment_value;
+      }
+    }
 
     const plan = calculatePaymentPlan({
       basePrice: payload.base_price,
       durationMonths: payload.contract_duration_months,
       cycle: payload.payment_cycle,
       interestRate,
-      downPaymentRate
+      downPaymentRate,
+      downPaymentType,
+      downPaymentFixedAmount
     });
 
     const nextPaymentDate = calculateNextPaymentDate(new Date(), payload.payment_cycle);
