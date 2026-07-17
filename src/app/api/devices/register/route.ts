@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/l
 import { hasPermission } from '@/lib/permissions';
 import { calculatePaymentPlan, calculateNextPaymentDate } from '@/lib/utils/calculator';
 import { getSystemSetting } from '@/app/actions/settings';
+import { sendSMS } from '@/lib/sms';
 import type { Customer, OsPlatform, PaymentCycle, ResidentialStatus } from '@/types';
 
 type RegisterDevicePayload = {
@@ -285,6 +286,10 @@ export async function POST(request: NextRequest) {
       total_owed: device.total_owed,
       mdm_device_id: device.mdm_device_id,
     };
+
+    // Send Welcome SMS
+    const welcomeMessage = `Welcome to Nexora, ${customer.full_name}! Your device (${device.device_model}) has been registered. Your total balance is GH₵${device.total_owed}. Next payment of GH₵${device.payment_cycle_amount} is due on ${nextPaymentDate.toLocaleDateString()}.`;
+    await sendSMS(customer.phone_number, welcomeMessage);
 
     return NextResponse.json({
       success: true,

@@ -34,7 +34,6 @@ const AVAILABLE_ACTIONS = [
   { id: 'mark_as_lost', label: 'Mark as Lost', icon: AlertTriangle, destructive: false },
   { id: 'mark_as_found', label: 'Mark as Found', icon: Check, destructive: false },
   { id: 'buzz_device', label: 'Buzz Device', icon: Smartphone, destructive: false },
-  { id: 'pause_kiosk', label: 'Disable Kiosk Mode', icon: LayoutGrid, destructive: false },
   { id: 'factory_reset', label: 'Factory Reset', icon: AlertTriangle, destructive: true },
   { id: 'delete_device', label: 'Delete Device', icon: AlertTriangle, destructive: true },
 ];

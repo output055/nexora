@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft, User, Smartphone, CreditCard, Calendar, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 import { getCalculatedPaymentStatus } from '@/lib/utils';
 import { RecordPaymentButton } from '@/components/dashboard/admin/RecordPaymentButton';
+import { ReversePaymentButton } from '@/components/dashboard/admin/ReversePaymentButton';
 import { getSystemSetting } from '@/app/actions/settings';
 
 export default async function CustomerDetailsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -176,12 +177,13 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
                     <th className="text-left text-xs font-semibold text-slate-500 px-6 py-3">Recorded By</th>
                     <th className="text-left text-xs font-semibold text-slate-500 px-6 py-3">Method</th>
                     <th className="text-left text-xs font-semibold text-slate-500 px-6 py-3">Ref</th>
+                    <th className="text-right text-xs font-semibold text-slate-500 px-6 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {payments.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-slate-500 text-sm">
+                      <td colSpan={6} className="px-6 py-12 text-center text-slate-500 text-sm">
                         No payments recorded yet.
                       </td>
                     </tr>
@@ -220,6 +222,9 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
                           <span className="text-xs font-mono text-slate-500">
                             {p.transaction_reference || '—'}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <ReversePaymentButton paymentId={p.id} />
                         </td>
                       </tr>
                     ))

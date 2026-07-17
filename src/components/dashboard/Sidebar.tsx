@@ -72,7 +72,7 @@ const adminNavItems: NavItem[] = [
         icon: <Map size={18} />,
         permission: 'manage_devices',
       },
-      { label: 'System Users', href: '/dashboard/admin/users', icon: <Users size={16} />, permission: 'manage_roles' },
+      { label: 'System Users', href: '/dashboard/admin/users', icon: <Users size={16} />, permission: 'manage_users' },
       { label: 'Roles & Permissions', href: '/dashboard/admin/settings', icon: <ShieldCheck size={16} />, permission: 'manage_roles' },
       { label: 'System Settings', href: '/dashboard/admin/system-settings', icon: <Settings size={16} />, permission: 'view_settings' },
       { label: 'Billing & Subscription', href: '/dashboard/admin/billing', icon: <CreditCard size={16} />, permission: 'view_settings' },

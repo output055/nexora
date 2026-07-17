@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { sendDeviceCommand } from '@/lib/manageengine';
 import { getSystemSetting } from './settings';
+import { sendSMS } from '@/lib/sms';
 
 export interface LogPaymentInput {
   customerId: string;
@@ -35,7 +36,7 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
           mdm_device_id, 
           payment_cycle_amount, 
           next_payment_date, 
-          customers(payment_cycle)
+          customers(phone_number, payment_cycle)
         `)
         .eq('id', input.deviceId)
         .single();
@@ -141,10 +142,116 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
         }
       }
 
+      // Send SMS Receipt
+      const cust: any = deviceBeforePayment?.customers;
+      if (cust && cust.phone_number) {
+        let msg = `Payment of GH₵${input.amount} received. `;
+        if (newBalance <= 0) {
+          msg += `Your device is fully paid off! Congratulations.`;
+        } else {
+          msg += `New balance: GH₵${newBalance}. Next payment due: ${nextDate.toLocaleDateString()}.`;
+        }
+        await sendSMS(cust.phone_number, msg);
+      }
+
     revalidatePath('/dashboard/admin/customers');
     return { success: true };
   } catch (error: any) {
     console.error('Unexpected error in logPayment:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function reversePayment(paymentId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createServerSupabaseClient();
+
+    // 1. Check Auth
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    // 2. Fetch Payment
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('id', paymentId)
+      .single();
+
+    if (paymentError || !payment) {
+      return { success: false, error: 'Payment not found' };
+    }
+
+    // 3. Fetch Device
+    let deviceData = null;
+    if (payment.device_id) {
+      const { data: device, error: deviceError } = await supabase
+        .from('devices')
+        .select(`*, customers(phone_number, payment_cycle)`)
+        .eq('id', payment.device_id)
+        .single();
+      
+      if (!deviceError && device) {
+        deviceData = device;
+      }
+    }
+
+    // 4. Delete Payment
+    const { error: deleteError } = await supabase
+      .from('payments')
+      .delete()
+      .eq('id', paymentId);
+
+    if (deleteError) {
+      return { success: false, error: deleteError.message };
+    }
+
+    // 5. Revert Device State
+    if (deviceData) {
+      const isDownPayment = (deviceData.remaining_balance + payment.amount_paid) >= deviceData.total_owed;
+      let nextDate = deviceData.next_payment_date ? new Date(deviceData.next_payment_date) : new Date();
+
+      if (!isDownPayment && deviceData.payment_cycle_amount > 0) {
+        const cust: any = deviceData.customers;
+        const cycle = (Array.isArray(cust) ? cust[0]?.payment_cycle : cust?.payment_cycle) || 'monthly';
+        const ratio = payment.amount_paid / deviceData.payment_cycle_amount;
+        
+        let daysToSubtract = 0;
+        if (cycle === 'daily') daysToSubtract = ratio * 1;
+        else if (cycle === 'weekly') daysToSubtract = ratio * 7;
+        else if (cycle === 'bi_weekly') daysToSubtract = ratio * 14;
+        else daysToSubtract = ratio * 30;
+        
+        nextDate.setHours(nextDate.getHours() - (daysToSubtract * 24));
+      }
+
+      const updatePayload: any = { 
+        next_payment_date: nextDate.toISOString(),
+        // Since we are reversing, we manually increase the balance.
+        // Wait, does deleting the payment trigger a balance update in the DB?
+        // Let's check: the DB trigger is `after insert`. It doesn't handle `after delete`.
+        // So we must manually update the balance here.
+        remaining_balance: deviceData.remaining_balance + payment.amount_paid
+      };
+
+      if (deviceData.payment_status === 'completed') {
+        updatePayload.payment_status = 'current';
+      }
+      
+      await supabase.from('devices').update(updatePayload).eq('id', deviceData.id);
+    }
+
+    // 6. Audit Log
+    await supabase.from('audit_logs').insert({
+      actor_name: user.email || 'Unknown',
+      action_description: `Reversed payment of GH₵${payment.amount_paid} for customer ${payment.customer_id}`
+    });
+
+    revalidatePath('/dashboard/admin/customers');
+    return { success: true };
+  } catch (error: any) {
+    console.error('Unexpected error in reversePayment:', error);
     return { success: false, error: error.message };
   }
 }

@@ -29,6 +29,14 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
     initialSettings['payment_down_payment_rate'] || '40'
   );
 
+  // SMS Settings
+  const [smsApiKey, setSmsApiKey] = useState(
+    initialSettings['sms_api_key'] || ''
+  );
+  const [smsSenderId, setSmsSenderId] = useState(
+    initialSettings['sms_sender_id'] || 'NEXORA'
+  );
+
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
@@ -44,6 +52,8 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
       'mdm_kiosk_pin': kioskPin,
       'payment_interest_rate': interestRate,
       'payment_down_payment_rate': downPaymentRate,
+      'sms_api_key': smsApiKey,
+      'sms_sender_id': smsSenderId,
     });
     
     if (result.success) {
@@ -104,6 +114,46 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
                 onChange={(e) => setDownPaymentRate(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
                 placeholder="40"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* SMS Gateway Settings Section */}
+        <div className="space-y-4 pt-4 border-t border-white/10">
+          <h3 className="text-lg font-medium text-white border-b border-white/5 pb-2">SMS Integration</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Arkesel API Key
+              </label>
+              <p className="text-xs text-gray-400 mb-2">
+                Your API key from Arkesel (v2 API).
+              </p>
+              <input
+                type="password"
+                value={smsApiKey}
+                onChange={(e) => setSmsApiKey(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                placeholder="sk_..."
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Sender ID
+              </label>
+              <p className="text-xs text-gray-400 mb-2">
+                Your registered Sender ID (max 11 chars).
+              </p>
+              <input
+                type="text"
+                maxLength={11}
+                value={smsSenderId}
+                onChange={(e) => setSmsSenderId(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                placeholder="NEXORA"
               />
             </div>
           </div>
