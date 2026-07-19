@@ -93,6 +93,10 @@ export function DeviceDetailsView({ device: initialDevice, location, onBack }: D
         if (actionName === 'Disable Lost Mode') {
           setIsLostMode(false);
           setLockPin(null);
+          // Also clear any passcode that ManageEngine enforced during Lost Mode
+          setTimeout(() => {
+            sendDeviceCommand(deviceId, 'clear_passcode', {});
+          }, 1000);
         }
 
         if (actionName === 'Lock Device') {

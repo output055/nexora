@@ -47,6 +47,8 @@ comment on table public.user_roles is 'Assigns roles to authenticated users';
 -- ── Customers ─────────────────────────────────────────────────────────────────
 create table if not exists public.customers (
   id                  uuid primary key default uuid_generate_v4(),
+  user_id             uuid references auth.users(id),
+  email               text unique,
   full_name           text not null,
   phone_number        text not null,
   ghana_card_id       text,

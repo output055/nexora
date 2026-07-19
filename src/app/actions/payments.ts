@@ -111,7 +111,9 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
           const lockCommand = await getSystemSetting('mdm_overdue_lock_command') || 'LostMode';
           
           if (lockCommand === 'LostMode') {
-            await sendDeviceCommand(deviceBeforePayment!.mdm_device_id, 'RemoveLostMode');
+            await sendDeviceCommand(deviceBeforePayment!.mdm_device_id, 'disable_lost_mode');
+            // Automatically clear the passcode that ManageEngine sets during Lost Mode
+            await sendDeviceCommand(deviceBeforePayment!.mdm_device_id, 'clear_passcode');
           } else if (lockCommand === 'DeviceLock') {
              // Depending on MDM, 'DeviceLock' might not have a direct 'Unlock', it just requires the user to enter passcode.
              // But if we have an explicit unlock, we call it here.
@@ -131,7 +133,7 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
       if (!updateError && needsUnenroll) {
         // Trigger MDM Unenroll Command (Corporate Wipe)
         try {
-          await sendDeviceCommand(deviceBeforePayment!.mdm_device_id, 'CorporateWipe');
+          await sendDeviceCommand(deviceBeforePayment!.mdm_device_id, 'corporate_wipe');
           
           await supabase.from('audit_logs').insert({
             actor_name: 'System',
@@ -228,18 +230,40 @@ export async function reversePayment(paymentId: string): Promise<{ success: bool
 
       const updatePayload: any = { 
         next_payment_date: nextDate.toISOString(),
-        // Since we are reversing, we manually increase the balance.
-        // Wait, does deleting the payment trigger a balance update in the DB?
-        // Let's check: the DB trigger is `after insert`. It doesn't handle `after delete`.
-        // So we must manually update the balance here.
         remaining_balance: deviceData.remaining_balance + payment.amount_paid
       };
 
-      if (deviceData.payment_status === 'completed') {
+      let needsLock = false;
+      if (nextDate < new Date() || isDownPayment) {
+        updatePayload.payment_status = 'overdue';
+        needsLock = true;
+      } else if (deviceData.payment_status === 'completed') {
         updatePayload.payment_status = 'current';
       }
       
       await supabase.from('devices').update(updatePayload).eq('id', deviceData.id);
+
+      if (needsLock) {
+        try {
+          const lockCommand = await getSystemSetting('mdm_overdue_lock_command') || 'LostMode';
+          let apiCommandName = lockCommand;
+          if (lockCommand === 'LostMode') apiCommandName = 'enable_lost_mode';
+          if (lockCommand === 'DeviceLock') apiCommandName = 'lock';
+
+          await sendDeviceCommand(deviceData.mdm_device_id, apiCommandName, {
+            lock_message: await getSystemSetting('mdm_lost_mode_message') || 'Your device has been locked due to a missed installment payment. Please contact support.',
+            phone_number: await getSystemSetting('mdm_lost_mode_phone') || '+233000000000',
+            passcode: await getSystemSetting('mdm_kiosk_pin') || '1234'
+          });
+
+          await supabase.from('audit_logs').insert({
+            actor_name: 'System',
+            action_description: `Automatically locked device ${deviceData.mdm_device_id} after payment reversal made it overdue.`
+          });
+        } catch (mdmError) {
+          console.error('Failed to send lock command on reversal:', mdmError);
+        }
+      }
     }
 
     // 6. Audit Log

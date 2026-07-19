@@ -13,6 +13,7 @@ import { EditCustomerModal } from './EditCustomerModal';
 import LogPaymentForm from '@/components/dashboard/payments/LogPaymentForm';
 import { deleteCustomerAction } from '@/app/actions/customers';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/auth-context';
 
 interface CustomerTableProps {
   customers: CustomerWithDevices[];
@@ -27,6 +28,7 @@ type PlatformFilter = 'all' | 'iOS' | 'Android';
 type CycleFilter = 'all' | 'daily' | 'weekly' | 'bi_weekly';
 
 export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProps) {
+  const { hasPermission } = useAuth();
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<StatusFilter>('all');
   const [filterPlatform, setFilterPlatform] = useState<PlatformFilter>('all');
@@ -362,7 +364,7 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                       >
                         <Eye size={16} />
                       </Link>
-                      {primaryDevice?.mdm_device_id && (
+                      {primaryDevice?.mdm_device_id && hasPermission('manage_devices') && (
                         <Link
                           href={`/dashboard/admin/mdm?deviceId=${primaryDevice.mdm_device_id}`}
                           className="p-1.5 text-slate-400 hover:text-sky-400 bg-transparent hover:bg-sky-500/10 rounded-lg transition-colors"
@@ -371,30 +373,36 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                           <Smartphone size={16} />
                         </Link>
                       )}
-                      <button
-                        onClick={() => setPayingCustomer({ customer: c, deviceId: primaryDevice?.id || null })}
-                        disabled={isDeleting === c.id}
-                        className="p-1.5 text-slate-400 hover:text-emerald-400 bg-transparent hover:bg-emerald-500/10 rounded-lg transition-colors"
-                        title="Log Payment"
-                      >
-                        <CreditCard size={16} />
-                      </button>
-                      <button
-                        onClick={() => setEditingCustomer(c)}
-                        disabled={isDeleting === c.id}
-                        className="p-1.5 text-slate-400 hover:text-blue-400 bg-transparent hover:bg-blue-500/10 rounded-lg transition-colors"
-                        title="Edit Customer"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(c.id)}
-                        disabled={isDeleting === c.id}
-                        className="p-1.5 text-slate-400 hover:text-red-400 bg-transparent hover:bg-red-500/10 rounded-lg transition-colors"
-                        title="Delete Customer"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {hasPermission('log_payment') && (
+                        <button
+                          onClick={() => setPayingCustomer({ customer: c, deviceId: primaryDevice?.id || null })}
+                          disabled={isDeleting === c.id}
+                          className="p-1.5 text-slate-400 hover:text-emerald-400 bg-transparent hover:bg-emerald-500/10 rounded-lg transition-colors"
+                          title="Log Payment"
+                        >
+                          <CreditCard size={16} />
+                        </button>
+                      )}
+                      {hasPermission('edit_customer') && (
+                        <button
+                          onClick={() => setEditingCustomer(c)}
+                          disabled={isDeleting === c.id}
+                          className="p-1.5 text-slate-400 hover:text-blue-400 bg-transparent hover:bg-blue-500/10 rounded-lg transition-colors"
+                          title="Edit Customer"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                      )}
+                      {hasPermission('delete_customer') && (
+                        <button
+                          onClick={() => handleDelete(c.id)}
+                          disabled={isDeleting === c.id}
+                          className="p-1.5 text-slate-400 hover:text-red-400 bg-transparent hover:bg-red-500/10 rounded-lg transition-colors"
+                          title="Delete Customer"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </motion.tr>

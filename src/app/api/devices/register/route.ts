@@ -8,6 +8,7 @@ import type { Customer, OsPlatform, PaymentCycle, ResidentialStatus } from '@/ty
 
 type RegisterDevicePayload = {
   full_name: string;
+  email: string;
   phone_number: string;
   ghana_card_id: string;
   alternative_phone_number: string;
@@ -47,6 +48,7 @@ function parseRegisterPayload(formData: FormData):
   | { error: string } {
   const payload = {
     full_name: cleanString(formData, 'full_name'),
+    email: cleanString(formData, 'email').toLowerCase(),
     phone_number: cleanString(formData, 'phone_number'),
     ghana_card_id: cleanString(formData, 'ghana_card_id').toUpperCase(),
     alternative_phone_number: cleanString(formData, 'alternative_phone_number'),
@@ -80,10 +82,11 @@ function parseRegisterPayload(formData: FormData):
 
   if (!payload.ghana_card_id) return { error: 'Ghana Card ID is required.' };
   if (!GHANA_CARD_PATTERN.test(payload.ghana_card_id)) return { error: 'Ghana Card ID must match GHA-XXXXXXXXX-X.' };
-  if (!(payload.ghana_card_scan instanceof File) || payload.ghana_card_scan.size === 0) return { error: 'Ghana Card scan/photo is required.' };
+  if (!payload.ghana_card_scan.size) return { error: 'Ghana Card scan/photo is required.' };
   if (payload.ghana_card_scan.size > MAX_SCAN_BYTES) return { error: 'Ghana Card scan must be 8MB or smaller.' };
   if (!ALLOWED_SCAN_TYPES.has(payload.ghana_card_scan.type)) return { error: 'Ghana Card scan must be a JPG, PNG, WebP, or PDF file.' };
   if (!payload.full_name) return { error: 'Full legal name is required.' };
+  if (!payload.email) return { error: 'Email address is required.' };
 
   if (!payload.phone_number) return { error: 'Primary phone number is required.' };
   if (!payload.alternative_phone_number) return { error: 'Alternative or emergency phone number is required.' };
@@ -171,10 +174,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: uploadError.message }, { status: 500 });
     }
 
+    // Generate random 6-character password
+    const rawPassword = Math.random().toString(36).slice(-6).toUpperCase();
+    
+    // Auto-create Auth User
+    const { data: authUser, error: createUserError } = await admin.auth.admin.createUser({
+      email: payload.email,
+      password: rawPassword,
+      email_confirm: true,
+      user_metadata: { full_name: payload.full_name }
+    });
+
+    if (createUserError) {
+      // If user already exists or other auth error
+      await admin.storage.from('ghana-card-scans').remove([scanPath]);
+      return NextResponse.json({ success: false, error: `Failed to create login account: ${createUserError.message}` }, { status: 500 });
+    }
+
+    // Assign 'customer' role
+    const { data: customerRole } = await admin.from('roles').select('id').eq('name', 'customer').single();
+    if (customerRole) {
+      await admin.from('user_roles').insert({
+        user_id: authUser.user.id,
+        role_id: customerRole.id
+      });
+    }
+
     const { data: customer, error: customerError } = await admin
       .from('customers')
       .insert({
         full_name: payload.full_name,
+        email: payload.email,
+        user_id: authUser.user.id,
         phone_number: payload.phone_number,
         ghana_card_id: payload.ghana_card_id,
         ghana_card_scan_path: scanPath,
@@ -245,9 +276,9 @@ export async function POST(request: NextRequest) {
         down_payment: plan.downPayment,
         payment_cycle_amount: plan.paymentCycleAmount,
         total_owed: plan.totalContractValue,
-        remaining_balance: plan.totalContractValue, // user hasn't made down payment in the system yet. Wait, if they make down payment during onboarding? We'll leave it as total for now.
+        remaining_balance: plan.totalContractValue,
         next_payment_date: nextPaymentDate.toISOString(),
-        payment_status: 'current',
+        payment_status: 'overdue',
       })
       .select('*')
       .single();
@@ -288,8 +319,10 @@ export async function POST(request: NextRequest) {
     };
 
     // Send Welcome SMS
-    const welcomeMessage = `Welcome to Nexora, ${customer.full_name}! Your device (${device.device_model}) has been registered. Your total balance is GH₵${device.total_owed}. Next payment of GH₵${device.payment_cycle_amount} is due on ${nextPaymentDate.toLocaleDateString()}.`;
-    await sendSMS(customer.phone_number, welcomeMessage);
+    await sendSMS(
+      payload.phone_number,
+      `Welcome to Nexora, ${payload.full_name}! Your device has been successfully registered. Your next payment of GHS ${plan.paymentCycleAmount} is due on ${nextPaymentDate.toLocaleDateString()}. \n\nLogin to your dashboard at ${process.env.NEXT_PUBLIC_APP_URL || 'https://nexora.app'}/dashboard/customer \nEmail: ${payload.email}\nPassword: ${rawPassword}`
+    );
 
     return NextResponse.json({
       success: true,

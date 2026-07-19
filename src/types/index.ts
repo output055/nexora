@@ -41,6 +41,8 @@ export interface UserProfile {
 // ─── Core Domain ──────────────────────────────────────────────────────────────
 export interface Customer {
   id: string;
+  user_id?: string;
+  email?: string;
   full_name: string;
   phone_number: string;
   ghana_card_id?: string;

@@ -82,10 +82,15 @@ const adminNavItems: NavItem[] = [
 
 const retailerNavItems: NavItem[] = [
   {
-    label: 'Field Collections',
-    href: '/dashboard/retailer',
-    icon: <CreditCard size={18} />,
-    permission: 'log_payment',
+    label: 'Overview',
+    href: '/dashboard/agent',
+    icon: <LayoutDashboard size={18} />,
+  },
+  {
+    label: 'Customer Directory',
+    href: '/dashboard/admin/customers',
+    icon: <Users size={18} />,
+    permission: 'view_customers',
   },
 ];
 
@@ -309,7 +314,7 @@ export function DashboardSidebar() {
         </div>
       ) : (!isRetailer && !isCustomer) && (
         <div className="p-3 border-t border-sidebar-border shrink-0">
-          <Link
+          {/* <Link
             href="/dashboard/admin/settings"
             suppressHydrationWarning
             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors
@@ -320,7 +325,7 @@ export function DashboardSidebar() {
           >
             <Settings size={18} />
             {!collapsed && <span>Settings</span>}
-          </Link>
+          </Link> */}
         </div>
       )}
     </div>

@@ -15,7 +15,9 @@ import {
 import { formatDate, formatDateTime } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 
-type MockPayment = {
+import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
+
+type PaymentRecord = {
   id: string;
   amount: number;
   date: string;
@@ -24,56 +26,40 @@ type MockPayment = {
   reference: string;
 };
 
-const MOCK_PAYMENTS: MockPayment[] = [
-  {
-    id: 'pay_1',
-    amount: 30.33,
-    date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    method: 'Mobile Money (MTN)',
-    status: 'completed',
-    reference: 'REF-839201',
-  },
-  {
-    id: 'pay_2',
-    amount: 30.33,
-    date: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
-    method: 'Mobile Money (Telecel)',
-    status: 'completed',
-    reference: 'REF-728192',
-  },
-  {
-    id: 'pay_3',
-    amount: 30.33,
-    date: new Date(Date.now() - 16 * 24 * 60 * 60 * 1000).toISOString(),
-    method: 'Visa Card ****4242',
-    status: 'completed',
-    reference: 'REF-617283',
-  },
-  {
-    id: 'pay_4',
-    amount: 30.33,
-    date: new Date(Date.now() - 23 * 24 * 60 * 60 * 1000).toISOString(),
-    method: 'Mobile Money (MTN)',
-    status: 'failed',
-    reference: 'REF-506374',
-  }
-];
-
 export default function CustomerPaymentHistory() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [payments, setPayments] = useState<MockPayment[]>([]);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    // Simulate fetching payment history
     const fetchPayments = async () => {
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setPayments(MOCK_PAYMENTS);
+      if (!user) return;
+      const supabase = createBrowserSupabaseClient();
+      
+      const { data: customer } = await supabase.from('customers').select('id').eq('user_id', user.id).single();
+      if (customer) {
+        const { data: dbPayments } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('customer_id', customer.id)
+          .order('created_at', { ascending: false });
+          
+        if (dbPayments) {
+          setPayments(dbPayments.map(p => ({
+            id: p.id,
+            amount: p.amount_paid,
+            date: p.created_at,
+            method: p.payment_method === 'cash' ? 'Cash Collection' : 'Paystack',
+            status: 'completed',
+            reference: p.transaction_reference || 'MANUAL-CASH'
+          })));
+        }
+      }
       setLoading(false);
     };
     fetchPayments();
-  }, []);
+  }, [user]);
 
   const filteredPayments = payments.filter(p => 
     p.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||

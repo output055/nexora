@@ -6,10 +6,17 @@ import { getCalculatedPaymentStatus } from '@/lib/utils';
 import { RecordPaymentButton } from '@/components/dashboard/admin/RecordPaymentButton';
 import { ReversePaymentButton } from '@/components/dashboard/admin/ReversePaymentButton';
 import { getSystemSetting } from '@/app/actions/settings';
+import { hasPermission } from '@/lib/permissions';
 
 export default async function CustomerDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createServerSupabaseClient();
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return notFound();
+
+  const canLogPayment = await hasPermission(user.id, 'log_payment');
+  const canReversePayment = await hasPermission(user.id, 'reverse_payment');
 
   const { data: customer, error } = await supabase
     .from('customers')
@@ -138,19 +145,25 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
                 </div>
               </div>
 
-              <div className="mt-4">
-                <RecordPaymentButton 
-                  customerId={customer.id} 
-                  deviceId={primaryDevice.id} 
-                  isDownPayment={payments.length === 0 && Number(primaryDevice.remaining_balance) >= Number(primaryDevice.total_owed) * 0.9} 
-                  defaultAmount={
-                    (payments.length === 0 && Number(primaryDevice.remaining_balance) >= Number(primaryDevice.total_owed) * 0.9)
-                      ? (primaryDevice.down_payment ? Number(primaryDevice.down_payment) : 0)
-                      : (primaryDevice.payment_cycle_amount ? Number(primaryDevice.payment_cycle_amount) : 0)
-                  }
-                  adminEmail={adminEmail}
-                />
-              </div>
+              {canLogPayment ? (
+                <div className="mt-4">
+                  <RecordPaymentButton 
+                    customerId={customer.id} 
+                    deviceId={primaryDevice.id} 
+                    isDownPayment={payments.length === 0 && Number(primaryDevice.remaining_balance) >= Number(primaryDevice.total_owed) * 0.9} 
+                    defaultAmount={
+                      (payments.length === 0 && Number(primaryDevice.remaining_balance) >= Number(primaryDevice.total_owed) * 0.9)
+                        ? (primaryDevice.down_payment ? Number(primaryDevice.down_payment) : 0)
+                        : (primaryDevice.payment_cycle_amount ? Number(primaryDevice.payment_cycle_amount) : 0)
+                    }
+                    adminEmail={adminEmail}
+                  />
+                </div>
+              ) : (
+                <div className="mt-4 bg-[#111827] border border-white/5 rounded-2xl p-4 text-center text-slate-500 text-sm">
+                  You do not have permission to log payments.
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -224,7 +237,7 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <ReversePaymentButton paymentId={p.id} />
+                          {canReversePayment ? <ReversePaymentButton paymentId={p.id} /> : <span className="text-slate-600 text-xs">—</span>}
                         </td>
                       </tr>
                     ))

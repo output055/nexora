@@ -1,12 +1,13 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertCircle,
   Apple,
   BriefcaseBusiness,
+  Camera,
   Check,
   CheckCircle2,
   ChevronLeft,
@@ -47,6 +48,7 @@ type DeviceProfile = {
 
 type RegisterForm = {
   full_name: string;
+  email: string;
   phone_number: string;
   ghana_card_id: string;
   ghana_card_scan: File | null;
@@ -92,6 +94,7 @@ type DiscoverResponse = {
 
 const emptyForm: RegisterForm = {
   full_name: '',
+  email: '',
   phone_number: '',
   ghana_card_id: '',
   ghana_card_scan: null,
@@ -162,7 +165,6 @@ export default function DeviceOnboardingPage() {
   const [defaultDownPaymentRate, setDefaultDownPaymentRate] = useState('40');
 
   useEffect(() => {
-    // Fetch global default financial settings
     Promise.all([
       getSystemSetting('payment_interest_rate'),
       getSystemSetting('payment_down_payment_rate')
@@ -171,10 +173,46 @@ export default function DeviceOnboardingPage() {
       const defaultDpr = dpr || '40';
       setDefaultDownPaymentRate(defaultDpr);
       
-      setAndroidForm(prev => ({ ...prev, interest_rate: defaultIr, down_payment_value: defaultDpr }));
-      setIosForm(prev => ({ ...prev, interest_rate: defaultIr, down_payment_value: defaultDpr }));
+      let initialAndroid = { ...emptyForm, interest_rate: defaultIr, down_payment_value: defaultDpr };
+      let initialIos = { ...emptyForm, interest_rate: defaultIr, down_payment_value: defaultDpr };
+      let initialWorkflow: Workflow = 'Android';
+      let initialStep = 0;
+
+      const saved = localStorage.getItem('nexora_onboarding_state');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.androidForm) {
+            initialAndroid = { ...initialAndroid, ...parsed.androidForm, ghana_card_scan: null };
+            if (!initialAndroid.interest_rate) initialAndroid.interest_rate = defaultIr;
+            if (!initialAndroid.down_payment_value) initialAndroid.down_payment_value = defaultDpr;
+          }
+          if (parsed.iosForm) {
+            initialIos = { ...initialIos, ...parsed.iosForm, ghana_card_scan: null };
+            if (!initialIos.interest_rate) initialIos.interest_rate = defaultIr;
+            if (!initialIos.down_payment_value) initialIos.down_payment_value = defaultDpr;
+          }
+          if (parsed.workflow) initialWorkflow = parsed.workflow as Workflow;
+          if (parsed.stepIndex !== undefined) initialStep = parsed.stepIndex;
+        } catch(e) {}
+      }
+
+      setAndroidForm(initialAndroid);
+      setIosForm(initialIos);
+      setWorkflow(initialWorkflow);
+      setStepIndex(initialStep);
     });
   }, []);
+
+  useEffect(() => {
+    const stateToSave = {
+      androidForm: { ...androidForm, ghana_card_scan: null },
+      iosForm: { ...iosForm, ghana_card_scan: null },
+      workflow,
+      stepIndex
+    };
+    localStorage.setItem('nexora_onboarding_state', JSON.stringify(stateToSave));
+  }, [androidForm, iosForm, workflow, stepIndex]);
 
   useEffect(() => {
     fetchDevices();
@@ -251,6 +289,11 @@ export default function DeviceOnboardingPage() {
 
     if (step === 'location') {
       if (!activeForm.digital_address || !activeForm.location_landmarks || !activeForm.residential_status) return 'Complete digital address, landmarks, and residential status.';
+      if (activeForm.residential_status === 'renting') {
+        if (!activeForm.landlord_contact) return 'Complete landlord contact.';
+        const phones = [activeForm.phone_number, activeForm.alternative_phone_number, activeForm.whatsapp_number].filter(Boolean);
+        if (phones.includes(activeForm.landlord_contact)) return 'Landlord contact cannot be the same as any of your personal phone numbers.';
+      }
     }
 
     if (step === 'work') {
@@ -297,6 +340,7 @@ export default function DeviceOnboardingPage() {
   const registerDevice = async (platform: OsPlatform, form: RegisterForm) => {
     const formData = new FormData();
     formData.set('full_name', form.full_name);
+    formData.set('email', form.email);
     formData.set('phone_number', form.phone_number);
     formData.set('ghana_card_id', form.ghana_card_id);
     formData.set('alternative_phone_number', form.alternative_phone_number);
@@ -364,6 +408,7 @@ export default function DeviceOnboardingPage() {
 
       setSelectedDeviceId('');
       setStepIndex(0);
+      localStorage.removeItem('nexora_onboarding_state');
       toast.success(`${(data.customer as any).device_model} registered to ${data.customer.full_name}.`);
       router.push(`/dashboard/admin/customers/${data.customer.id}`);
     } catch (submitError) {
@@ -453,7 +498,35 @@ export default function DeviceOnboardingPage() {
 
             {currentStep.id === 'identity' && (
               <div className="grid gap-4 sm:grid-cols-2">
-                <Input id="ghana-card-id" label="Ghana Card Unique ID" value={activeForm.ghana_card_id} onChange={(value) => updateForm(workflow, 'ghana_card_id', value.toUpperCase())} placeholder="GHA-123456789-0" required />
+                <Input 
+                  id="ghana-card-id" 
+                  label="Ghana Card Unique ID" 
+                  value={activeForm.ghana_card_id} 
+                  onChange={(value) => {
+                    const v = value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                    const alnum = v.replace(/[^A-Z0-9]/g, '');
+                    if (alnum.length === 0) {
+                      updateForm(workflow, 'ghana_card_id', '');
+                      return;
+                    }
+                    let prefix = alnum.substring(0, 3);
+                    let rest = alnum.substring(3);
+                    if (prefix !== 'GHA' && 'GHA'.startsWith(prefix)) {
+                      updateForm(workflow, 'ghana_card_id', prefix);
+                      return;
+                    } else if (prefix !== 'GHA') {
+                      rest = alnum.replace(/[^0-9]/g, '');
+                      prefix = 'GHA';
+                    }
+                    rest = rest.replace(/[^0-9]/g, '');
+                    let formatted = prefix;
+                    if (rest.length > 0) formatted += '-' + rest.substring(0, 9);
+                    if (rest.length > 9) formatted += '-' + rest.substring(9, 10);
+                    updateForm(workflow, 'ghana_card_id', formatted);
+                  }} 
+                  placeholder="GHA-123456789-0" 
+                  required 
+                />
                 <Input id="legal-name" label="Full Legal Name" value={activeForm.full_name} onChange={(value) => updateForm(workflow, 'full_name', value)} required />
                 <FileInput id="ghana-card-scan" label="Ghana Card Photo / Scan" file={activeForm.ghana_card_scan} onChange={(file) => updateForm(workflow, 'ghana_card_scan', file)} />
               </div>
@@ -461,15 +534,53 @@ export default function DeviceOnboardingPage() {
 
             {currentStep.id === 'contact' && (
               <div className="grid gap-4 sm:grid-cols-2">
+                <Input id="email" label="Email Address" type="email" value={activeForm.email} onChange={(value) => updateForm(workflow, 'email', value)} required />
                 <Input id="primary-phone" label="Primary Phone / MoMo Number" value={activeForm.phone_number} onChange={(value) => updateForm(workflow, 'phone_number', value)} required />
-                <Input id="alt-phone" label="Alternative / Emergency Phone" value={activeForm.alternative_phone_number} onChange={(value) => updateForm(workflow, 'alternative_phone_number', value)} required />
-                <Input id="whatsapp-phone" label="Active WhatsApp Number" value={activeForm.whatsapp_number} onChange={(value) => updateForm(workflow, 'whatsapp_number', value)} required />
+                <Input 
+                  id="alt-phone" 
+                  label="Alternative / Emergency Phone" 
+                  value={activeForm.alternative_phone_number} 
+                  onChange={(value) => updateForm(workflow, 'alternative_phone_number', value)} 
+                  required 
+                  action={
+                    <button type="button" onClick={() => updateForm(workflow, 'alternative_phone_number', activeForm.phone_number)} className="text-[10px] font-semibold text-blue-400 hover:text-blue-300">
+                      Same as Primary
+                    </button>
+                  }
+                />
+                <Input 
+                  id="whatsapp-phone" 
+                  label="Active WhatsApp Number" 
+                  value={activeForm.whatsapp_number} 
+                  onChange={(value) => updateForm(workflow, 'whatsapp_number', value)} 
+                  required 
+                  action={
+                    <button type="button" onClick={() => updateForm(workflow, 'whatsapp_number', activeForm.phone_number)} className="text-[10px] font-semibold text-blue-400 hover:text-blue-300">
+                      Same as Primary
+                    </button>
+                  }
+                />
               </div>
             )}
 
             {currentStep.id === 'location' && (
               <div className="grid gap-4 sm:grid-cols-2">
-                <Input id="digital-address" label="Ghana Post Digital Address" value={activeForm.digital_address} onChange={(value) => updateForm(workflow, 'digital_address', value.toUpperCase())} placeholder="GA-123-4567" required />
+                <Input 
+                  id="digital-address" 
+                  label="Ghana Post Digital Address" 
+                  value={activeForm.digital_address} 
+                  onChange={(value) => {
+                    const clean = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                    let formatted = '';
+                    for (let i = 0; i < clean.length; i++) {
+                      if (i === 2 || i === 5) formatted += '-';
+                      formatted += clean[i];
+                    }
+                    updateForm(workflow, 'digital_address', formatted.substring(0, 11));
+                  }} 
+                  placeholder="GA-123-4567" 
+                  required 
+                />
                 <Select id="residential-status" label="Residential Status" value={activeForm.residential_status} onChange={(value) => updateForm(workflow, 'residential_status', value)} options={[
                   { value: 'owner', label: 'Owner' },
                   { value: 'renting', label: 'Renting' },
@@ -477,7 +588,9 @@ export default function DeviceOnboardingPage() {
                   { value: 'other', label: 'Other' },
                 ]} />
                 <TextArea id="landmarks" label="Landmarks" value={activeForm.location_landmarks} onChange={(value) => updateForm(workflow, 'location_landmarks', value)} className="sm:col-span-2" required />
-                <Input id="landlord-contact" label="Landlord / Caretaker Contact" value={activeForm.landlord_contact} onChange={(value) => updateForm(workflow, 'landlord_contact', value)} />
+                {activeForm.residential_status === 'renting' && (
+                  <Input id="landlord-contact" label="Landlord / Caretaker Contact" value={activeForm.landlord_contact} onChange={(value) => updateForm(workflow, 'landlord_contact', value)} required />
+                )}
               </div>
             )}
 
@@ -511,7 +624,7 @@ export default function DeviceOnboardingPage() {
                   disabled={submitting}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-[0_4px_20px_rgba(37,99,235,0.35)] transition-all hover:bg-blue-500 disabled:opacity-60"
                 >
-                  Continue
+                  Save & Continue
                   <ChevronRight size={16} />
                 </button>
               ) : (
@@ -737,6 +850,18 @@ function DeviceStep({
   const platformLabel = workflow === 'Android' ? 'Android' : 'Apple';
   const PlatformIcon = workflow === 'Android' ? Smartphone : Apple;
 
+  const basePrice = Number(form.base_price) || 0;
+  const interestRate = Number(form.interest_rate) || 0;
+  const totalContractValue = basePrice + (basePrice * interestRate) / 100;
+
+  let calculatedDownPayment = 0;
+  if (form.down_payment_type === 'fixed') {
+    calculatedDownPayment = Number(form.down_payment_value) || 0;
+  } else {
+    const rate = Number(form.down_payment_value) || 0;
+    calculatedDownPayment = (totalContractValue * rate) / 100;
+  }
+
   return (
     <div className="space-y-5">
       <div className="space-y-3 rounded-xl border border-white/8 bg-white/5 p-4">
@@ -828,6 +953,22 @@ function DeviceStep({
           <Select id={`${workflow}-dp-type`} label="Down Payment Type" value={form.down_payment_type} onChange={(value) => onChange('down_payment_type', value as any)} options={[{ value: 'percentage', label: 'Percentage (%)' }, { value: 'fixed', label: 'Fixed Amount (GH₵)' }]} />
           <Input id={`${workflow}-dp-value`} label={form.down_payment_type === 'percentage' ? 'Down Payment (%)' : 'Down Payment Amount (GH₵)'} type="number" min="0" step="1" value={form.down_payment_value} onChange={(value) => onChange('down_payment_value', value)} required />
         </div>
+        {(calculatedDownPayment > 0 || totalContractValue > 0) && (
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+            {calculatedDownPayment > 0 && (
+              <div className="flex-1 flex items-center justify-between p-3 rounded-lg border border-blue-500/20 bg-blue-500/10">
+                <span className="text-xs font-medium text-blue-300">Down Payment:</span>
+                <span className="text-sm font-bold text-white tracking-tight">GH₵ {calculatedDownPayment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            )}
+            {totalContractValue > 0 && (
+              <div className="flex-1 flex items-center justify-between p-3 rounded-lg border border-white/5 bg-white/5">
+                <span className="text-xs font-medium text-slate-400">Balance to Finance:</span>
+                <span className="text-sm font-bold text-slate-200 tracking-tight">GH₵ {Math.max(totalContractValue - calculatedDownPayment, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -846,6 +987,7 @@ function Input({
   min,
   step,
   placeholder,
+  action,
 }: {
   id: string;
   label: string;
@@ -857,12 +999,16 @@ function Input({
   min?: string;
   step?: string;
   placeholder?: string;
+  action?: React.ReactNode;
 }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-1.5 block text-xs font-medium text-slate-400">
-        {label}
-      </label>
+      <div className="flex items-center justify-between mb-1.5">
+        <label htmlFor={id} className="block text-xs font-medium text-slate-400">
+          {label}
+        </label>
+        {action}
+      </div>
       <input
         id={id}
         type={type}
@@ -958,20 +1104,105 @@ function FileInput({
   file: File | null;
   onChange: (file: File | null) => void;
 }) {
+  const [mode, setMode] = useState<'upload' | 'camera'>('upload');
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    let currentStream: MediaStream | null = null;
+
+    if (mode === 'camera') {
+      // Try environment camera first, fallback to user/default camera
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .catch(() => navigator.mediaDevices.getUserMedia({ video: true }))
+        .then((stream) => {
+          currentStream = stream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            videoRef.current.play().catch(e => console.error("Video play error", e));
+          }
+        })
+        .catch(err => {
+          console.error("Camera access error:", err);
+          setMode('upload');
+        });
+    }
+
+    return () => {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [mode]);
+
+  const capturePhoto = () => {
+    if (videoRef.current && videoRef.current.readyState >= 2) { // HAVE_CURRENT_DATA or better
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth || 640;
+      canvas.height = videoRef.current.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const capturedFile = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+            onChange(capturedFile);
+            setMode('upload');
+          }
+        }, 'image/jpeg', 0.8);
+      }
+    }
+  };
+
   return (
     <div className="sm:col-span-2">
-      <label htmlFor={id} className="mb-1.5 block text-xs font-medium text-slate-400">
-        {label}
-      </label>
-      <input
-        id={id}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,application/pdf"
-        onChange={(event) => onChange(event.target.files?.[0] ?? null)}
-        required
-        className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-slate-300 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-600 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
-      />
-      {file && <p className="mt-2 text-xs text-slate-500">{file.name}</p>}
+      <div className="flex items-center justify-between mb-1.5">
+        <label htmlFor={id} className="block text-xs font-medium text-slate-400">
+          {label}
+        </label>
+        {mode === 'upload' ? (
+          <button type="button" onClick={() => setMode('camera')} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+            <Camera size={14} /> Use Webcam
+          </button>
+        ) : (
+          <button type="button" onClick={() => setMode('upload')} className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1">
+            <X size={14} /> Cancel
+          </button>
+        )}
+      </div>
+
+      {mode === 'camera' ? (
+        <div className="rounded-xl border border-blue-500/30 bg-black overflow-hidden relative aspect-video flex flex-col">
+          <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+          <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+            <button type="button" onClick={capturePhoto} className="bg-blue-600 hover:bg-blue-500 text-white rounded-full p-3 shadow-lg border-2 border-white/20">
+              <Camera size={24} />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="relative">
+          <input
+            id={id}
+            type="file"
+            accept="image/*,application/pdf"
+            capture="environment"
+            onChange={(event) => onChange(event.target.files?.[0] ?? null)}
+            required={!file}
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-slate-300 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-600 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
+          />
+          {file && (
+            <div className="mt-3 flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-emerald-400" />
+                <span className="text-xs text-emerald-200 truncate max-w-[200px]">{file.name}</span>
+              </div>
+              <button type="button" onClick={() => onChange(null)} className="text-xs text-red-400 hover:text-red-300">
+                Remove
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

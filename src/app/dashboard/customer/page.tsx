@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Info
 } from 'lucide-react';
+import { usePaystackPayment } from 'react-paystack';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/contexts/auth-context';
 import { getCalculatedPaymentStatus, formatCurrency, formatDate } from '@/lib/utils';
@@ -70,46 +71,51 @@ export default function CustomerDashboard() {
     const fetchMyData = async () => {
       if (!user) return;
       
-      // Simulate network request
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      const supabase = createBrowserSupabaseClient();
+      
+      // Fetch customer linked to this auth user
+      const { data: customerData, error: customerError } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+        
+      if (customerError || !customerData) {
+        setLoading(false);
+        return;
+      }
 
-      const dummyDevice: Device = {
-        id: 'dev_123',
-        customer_id: 'cust_123',
-        os_platform: 'Android',
-        device_model: 'Samsung Galaxy A14',
-        mdm_device_id: 'mdm_987654321',
-        imei: '358921104829102',
-        payment_cycle_amount: 30.33,
-        total_owed: 1200.50,
-        remaining_balance: 850.25,
-        payment_status: 'overdue',
-        next_payment_date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
-        contract_duration_months: 12,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+      // Fetch active device for this customer
+      const { data: deviceData, error: deviceError } = await supabase
+        .from('devices')
+        .select('*')
+        .eq('customer_id', customerData.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
 
-      const dummyCustomer: Customer = {
-        id: 'cust_123',
-        full_name: user.full_name || 'Kwame Mensah',
-        phone_number: '0541234567',
-        payment_cycle: 'weekly',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+      if (deviceError || !deviceData) {
+        setCustomerData({
+          ...(customerData as Customer),
+          device: null,
+          paymentStatus: 'completed',
+          overdueCycles: 0
+        });
+        setLoading(false);
+        return;
+      }
 
       const status = getCalculatedPaymentStatus(
-        dummyDevice.payment_status, 
-        dummyDevice.remaining_balance, 
-        dummyDevice.next_payment_date
+        deviceData.payment_status, 
+        deviceData.remaining_balance, 
+        deviceData.next_payment_date
       );
       
-      const overdueCycles = calculateOverdueCycles(dummyCustomer.payment_cycle, dummyDevice.next_payment_date);
+      const overdueCycles = calculateOverdueCycles(customerData.payment_cycle, deviceData.next_payment_date);
 
       setCustomerData({
-        ...dummyCustomer,
-        device: dummyDevice,
+        ...(customerData as Customer),
+        device: deviceData as Device,
         paymentStatus: status,
         overdueCycles
       });
@@ -119,25 +125,52 @@ export default function CustomerDashboard() {
     fetchMyData();
   }, [user]);
 
+  const paystackConfig = {
+    reference: `NEX-${new Date().getTime()}`,
+    email: user?.email || 'customer@nexora.app',
+    amount: 0, // Will be overridden in onSubmitPayment
+    publicKey: process.env.NEXT_PUBLIC_ADMIN_PAYSTACK_PUBLIC_KEY || '',
+    currency: 'GHS',
+  };
+
+  const initializePayment = usePaystackPayment(paystackConfig);
+
   const onSubmitPayment = async (data: PaymentForm) => {
     if (!customerData?.device) return;
     
     setSubmitting(true);
-    // Simulate Paystack popup and payment processing
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
     const amountNum = Number(data.amount);
-    const wasCleared = amountNum >= customerData.device.remaining_balance;
-
-    setSuccessTx({ amount: amountNum, wasCleared });
-    toast.success(`Payment of GH₵${amountNum.toLocaleString()} successful!`);
-    reset();
-    setSubmitting(false);
-
-    // Clear success message after 5 seconds
-    setTimeout(() => {
-      setSuccessTx(null);
-    }, 5000);
+    
+    initializePayment({
+      config: {
+        ...paystackConfig,
+        amount: amountNum * 100, // Paystack expects kobo/pesewas
+        metadata: {
+          custom_fields: [
+            { display_name: 'Customer ID', variable_name: 'customer_id', value: customerData.id },
+            { display_name: 'Device ID', variable_name: 'device_id', value: customerData.device.id }
+          ]
+        }
+      },
+      onSuccess: async (reference) => {
+        // Optimistic UI update
+        const wasCleared = amountNum >= customerData.device!.remaining_balance;
+        setSuccessTx({ amount: amountNum, wasCleared });
+        toast.success(`Payment of GH₵${amountNum.toLocaleString()} successful!`);
+        
+        // Refresh data to reflect backend webhook updates after a short delay
+        setTimeout(() => {
+          window.location.reload();
+        }, 4000);
+        
+        reset();
+        setSubmitting(false);
+      },
+      onClose: () => {
+        toast.error("Payment cancelled.");
+        setSubmitting(false);
+      }
+    });
   };
 
   if (loading) {
@@ -160,7 +193,12 @@ export default function CustomerDashboard() {
 
   const { device, paymentStatus, overdueCycles } = customerData;
   const isLocked = paymentStatus === 'overdue';
-  const installmentAmount = Math.min((device.payment_cycle_amount || 0) * overdueCycles, device.remaining_balance);
+  
+  const isInitialPayment = device.remaining_balance === device.total_owed && device.down_payment > 0;
+  
+  const installmentAmount = isInitialPayment
+    ? Math.min(device.down_payment, device.remaining_balance)
+    : Math.min((device.payment_cycle_amount || 0) * overdueCycles, device.remaining_balance);
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
@@ -242,7 +280,7 @@ export default function CustomerDashboard() {
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">IMEI</p>
-                <p className="font-semibold text-white font-mono text-sm">{device.imei || 'N/A'}</p>
+                <p className="font-semibold text-white font-mono text-sm break-all">{device.imei || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">Contract Duration</p>

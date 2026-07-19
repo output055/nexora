@@ -89,7 +89,8 @@ export async function POST(request: Request) {
           try {
             const lockCommand = await getSystemSetting('mdm_overdue_lock_command') || 'LostMode';
             if (lockCommand === 'LostMode') {
-              await sendDeviceCommand(deviceBeforePayment.mdm_device_id, 'RemoveLostMode');
+              await sendDeviceCommand(deviceBeforePayment.mdm_device_id, 'disable_lost_mode');
+              await sendDeviceCommand(deviceBeforePayment.mdm_device_id, 'clear_passcode');
             }
             // Add other unlock conditions based on the configured lock mode if needed.
             

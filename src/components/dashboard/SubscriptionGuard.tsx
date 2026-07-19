@@ -69,9 +69,9 @@ export function SubscriptionGuard({ children }: { children: React.ReactNode }) {
             <Lock className="text-red-500" size={32} />
           </div>
 
-          <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">Platform Suspended</h2>
+          <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">ManageEngine API Suspended</h2>
           <p className="text-slate-400 mb-8 leading-relaxed">
-            Access to the Nexora platform has been temporarily disabled due to an overdue subscription payment. 
+            Your connection to the ManageEngine MDM API has been restricted due to an unpaid API billing cycle. Please settle your outstanding API usage invoice to restore device management capabilities.
           </p>
 
           {isAdmin ? (
@@ -80,7 +80,7 @@ export function SubscriptionGuard({ children }: { children: React.ReactNode }) {
               className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(37,99,235,0.2)]"
             >
               <CreditCard size={18} />
-              Go to Billing Portal
+              Resolve API Billing
               <ArrowRight size={16} />
             </Link>
           ) : (
