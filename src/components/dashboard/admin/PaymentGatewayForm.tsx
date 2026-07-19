@@ -9,7 +9,7 @@ interface PaymentGatewayFormProps {
 
 export default function PaymentGatewayForm({ initialSettings }: PaymentGatewayFormProps) {
   const [adminPaystackEmail, setAdminPaystackEmail] = useState(
-    initialSettings['admin_paystack_email'] || 'admin@nexora.com'
+    initialSettings['admin_paystack_email'] || 'admin@credifon.com'
   );
 
   const [loading, setLoading] = useState(false);
@@ -64,7 +64,7 @@ export default function PaymentGatewayForm({ initialSettings }: PaymentGatewayFo
             value={adminPaystackEmail}
             onChange={(e) => setAdminPaystackEmail(e.target.value)}
             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-            placeholder="admin@nexora.com"
+            placeholder="admin@credifon.com"
           />
         </div>
 

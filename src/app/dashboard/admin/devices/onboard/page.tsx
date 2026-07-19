@@ -150,7 +150,7 @@ export default function DeviceOnboardingPage() {
   const [iosForm, setIosForm] = useState<RegisterForm>(emptyForm);
   const router = useRouter();
 
-  // Devices fetched from Miradore (filtered by platform, cross-checked against Nexora DB)
+  // Devices fetched from Miradore (filtered by platform, cross-checked against Credifon DB)
   const [androidDevices, setAndroidDevices] = useState<DiscoveredDevice[]>([]);
   const [iosDevices, setIosDevices] = useState<DiscoveredDevice[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
@@ -178,7 +178,7 @@ export default function DeviceOnboardingPage() {
       let initialWorkflow: Workflow = 'Android';
       let initialStep = 0;
 
-      const saved = localStorage.getItem('nexora_onboarding_state');
+      const saved = localStorage.getItem('credifon_onboarding_state');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
@@ -211,7 +211,7 @@ export default function DeviceOnboardingPage() {
       workflow,
       stepIndex
     };
-    localStorage.setItem('nexora_onboarding_state', JSON.stringify(stateToSave));
+    localStorage.setItem('credifon_onboarding_state', JSON.stringify(stateToSave));
   }, [androidForm, iosForm, workflow, stepIndex]);
 
   useEffect(() => {
@@ -408,9 +408,9 @@ export default function DeviceOnboardingPage() {
 
       setSelectedDeviceId('');
       setStepIndex(0);
-      localStorage.removeItem('nexora_onboarding_state');
+      localStorage.removeItem('credifon_onboarding_state');
       toast.success(`${(data.customer as any).device_model} registered to ${data.customer.full_name}.`);
-      router.push(`/dashboard/admin/customers/${data.customer.id}`);
+      router.push(`/dashboard/admin/customers/${data.customer.id}/agreement?from=onboarding`);
     } catch (submitError) {
       toast.error(submitError instanceof Error ? submitError.message : 'Registration failed.');
     } finally {
@@ -1105,7 +1105,18 @@ function FileInput({
   onChange: (file: File | null) => void;
 }) {
   const [mode, setMode] = useState<'upload' | 'camera'>('upload');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (file && file.type.startsWith('image/')) {
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setPreviewUrl(null);
+    }
+  }, [file]);
 
   useEffect(() => {
     let currentStream: MediaStream | null = null;
@@ -1192,11 +1203,17 @@ function FileInput({
           />
           {file && (
             <div className="mt-3 flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={16} className="text-emerald-400" />
+              <div className="flex items-center gap-3">
+                {previewUrl ? (
+                  <div className="w-10 h-10 rounded-lg overflow-hidden border border-emerald-500/30 flex-shrink-0 bg-black">
+                    <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
+                )}
                 <span className="text-xs text-emerald-200 truncate max-w-[200px]">{file.name}</span>
               </div>
-              <button type="button" onClick={() => onChange(null)} className="text-xs text-red-400 hover:text-red-300">
+              <button type="button" onClick={() => onChange(null)} className="text-xs text-red-400 hover:text-red-300 px-2">
                 Remove
               </button>
             </div>

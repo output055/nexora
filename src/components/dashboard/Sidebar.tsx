@@ -188,7 +188,7 @@ export function DashboardSidebar() {
               <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
                 <Smartphone size={16} className="text-blue-400" />
               </div>
-              <span className="font-bold text-white text-lg tracking-tight">Nexora</span>
+              <span className="font-bold text-white text-lg tracking-tight">Credifon</span>
             </motion.div>
           )}
         </AnimatePresence>

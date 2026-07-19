@@ -95,7 +95,7 @@ export function DeviceDetailsView({ device: initialDevice, location, onBack }: D
           setLockPin(null);
           // Also clear any passcode that ManageEngine enforced during Lost Mode
           setTimeout(() => {
-            sendDeviceCommand(deviceId, 'clear_passcode', {});
+            executeDeviceCommandAction(device.device_id, 'clear_passcode', {});
           }, 1000);
         }
 

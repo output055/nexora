@@ -24,7 +24,7 @@ function normalizePhoneNumber(phone: string): string {
 export async function sendSMS(to: string, message: string): Promise<boolean> {
   try {
     const apiKey = await getSystemSetting('sms_api_key');
-    const senderId = await getSystemSetting('sms_sender_id') || 'NEXORA';
+    const senderId = await getSystemSetting('sms_sender_id') || 'CREDIFON';
 
     if (!apiKey) {
       console.warn('SMS API Key is not configured. Skipping SMS sending.');

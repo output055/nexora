@@ -147,11 +147,11 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
       // Send SMS Receipt
       const cust: any = deviceBeforePayment?.customers;
       if (cust && cust.phone_number) {
-        let msg = `Payment of GH₵${input.amount} received. `;
+        let msg = `Payment of GHS ${Number(input.amount).toFixed(2)} received. `;
         if (newBalance <= 0) {
-          msg += `Your device is fully paid off! Congratulations.`;
+          msg += `Device fully paid off! Congrats.`;
         } else {
-          msg += `New balance: GH₵${newBalance}. Next payment due: ${nextDate.toLocaleDateString()}.`;
+          msg += `Bal: GHS ${Number(newBalance).toFixed(2)}. Next due: ${nextDate.toLocaleDateString()}`;
         }
         await sendSMS(cust.phone_number, msg);
       }

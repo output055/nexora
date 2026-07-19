@@ -127,7 +127,7 @@ export default function CustomerDashboard() {
 
   const paystackConfig = {
     reference: `NEX-${new Date().getTime()}`,
-    email: user?.email || 'customer@nexora.app',
+    email: user?.email || 'customer@credifon.app',
     amount: 0, // Will be overridden in onSubmitPayment
     publicKey: process.env.NEXT_PUBLIC_ADMIN_PAYSTACK_PUBLIC_KEY || '',
     currency: 'GHS',
@@ -194,10 +194,10 @@ export default function CustomerDashboard() {
   const { device, paymentStatus, overdueCycles } = customerData;
   const isLocked = paymentStatus === 'overdue';
   
-  const isInitialPayment = device.remaining_balance === device.total_owed && device.down_payment > 0;
+  const isInitialPayment = device.remaining_balance === device.total_owed && (device.down_payment || 0) > 0;
   
   const installmentAmount = isInitialPayment
-    ? Math.min(device.down_payment, device.remaining_balance)
+    ? Math.min((device.down_payment || 0), device.remaining_balance)
     : Math.min((device.payment_cycle_amount || 0) * overdueCycles, device.remaining_balance);
 
   return (

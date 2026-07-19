@@ -49,7 +49,7 @@ export default function CustomerSupport() {
           <div>
             <h3 className="font-bold text-white mb-1">Email Us</h3>
             <p className="text-sm text-slate-400 mb-3">Send us an email and we'll respond within 24 hours.</p>
-            <p className="font-medium text-blue-400">support@nexora.app</p>
+            <p className="font-medium text-blue-400">support@credifon.app</p>
           </div>
         </div>
       </div>

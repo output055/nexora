@@ -5,8 +5,8 @@ import { getAllSystemSettings } from '@/app/actions/settings';
 import { Settings as SettingsIcon } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'System Settings | Nexora',
-  description: 'Manage Nexora platform settings',
+  title: 'System Settings | Credifon',
+  description: 'Manage Credifon platform settings',
 };
 
 export default async function SettingsPage() {

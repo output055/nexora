@@ -15,7 +15,7 @@ interface RecordPaymentButtonProps {
   adminEmail?: string;
 }
 
-export function RecordPaymentButton({ customerId, deviceId, isDownPayment, defaultAmount = 0, adminEmail = 'admin@nexora.com' }: RecordPaymentButtonProps) {
+export function RecordPaymentButton({ customerId, deviceId, isDownPayment, defaultAmount = 0, adminEmail = 'admin@credifon.com' }: RecordPaymentButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [amount, setAmount] = useState(defaultAmount ? defaultAmount.toString() : '');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'paystack_momo' | 'bank_transfer'>(isDownPayment ? 'paystack_momo' : 'cash');

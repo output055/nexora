@@ -71,7 +71,7 @@ function parseRegisterPayload(formData: FormData):
     interest_rate: cleanString(formData, 'interest_rate') ? Number(cleanString(formData, 'interest_rate')) : undefined,
     down_payment_type: cleanString(formData, 'down_payment_type') as 'percentage' | 'fixed' || undefined,
     down_payment_value: cleanString(formData, 'down_payment_value') ? Number(cleanString(formData, 'down_payment_value')) : undefined,
-    ghana_card_scan: formData.get('ghana_card_scan'),
+    ghana_card_scan: formData.get('ghana_card_scan') as File | null,
   };
 
   if (!payload.device_model) return { error: 'Device model is required.' };
@@ -82,7 +82,7 @@ function parseRegisterPayload(formData: FormData):
 
   if (!payload.ghana_card_id) return { error: 'Ghana Card ID is required.' };
   if (!GHANA_CARD_PATTERN.test(payload.ghana_card_id)) return { error: 'Ghana Card ID must match GHA-XXXXXXXXX-X.' };
-  if (!payload.ghana_card_scan.size) return { error: 'Ghana Card scan/photo is required.' };
+  if (!payload.ghana_card_scan || !payload.ghana_card_scan.size) return { error: 'Ghana Card scan/photo is required.' };
   if (payload.ghana_card_scan.size > MAX_SCAN_BYTES) return { error: 'Ghana Card scan must be 8MB or smaller.' };
   if (!ALLOWED_SCAN_TYPES.has(payload.ghana_card_scan.type)) return { error: 'Ghana Card scan must be a JPG, PNG, WebP, or PDF file.' };
   if (!payload.full_name) return { error: 'Full legal name is required.' };
@@ -321,7 +321,7 @@ export async function POST(request: NextRequest) {
     // Send Welcome SMS
     await sendSMS(
       payload.phone_number,
-      `Welcome to Nexora, ${payload.full_name}! Your device has been successfully registered. Your next payment of GHS ${plan.paymentCycleAmount} is due on ${nextPaymentDate.toLocaleDateString()}. \n\nLogin to your dashboard at ${process.env.NEXT_PUBLIC_APP_URL || 'https://nexora.app'}/dashboard/customer \nEmail: ${payload.email}\nPassword: ${rawPassword}`
+      `Credifon: Device registered! GHS ${Number(plan.paymentCycleAmount).toFixed(2)} due ${nextPaymentDate.toLocaleDateString('en-GB')}. Login: ${process.env.NEXT_PUBLIC_APP_URL || 'credifon.app'} User: ${payload.email} Pw: ${rawPassword}`
     );
 
     return NextResponse.json({

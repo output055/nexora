@@ -468,7 +468,7 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                 customerId={payingCustomer.customer.id}
                 deviceId={payingCustomer.deviceId || undefined}
                 remainingBalance={Number(payingCustomer.customer.devices?.[0]?.remaining_balance) || 0}
-                customerEmail="customer@nexora.test" 
+                customerEmail="customer@credifon.test" 
               />
             </motion.div>
           </div>

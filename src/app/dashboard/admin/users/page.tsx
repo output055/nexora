@@ -1,7 +1,7 @@
 import { UserManagement } from '@/components/dashboard/admin/UserManagement';
 
 export const metadata = {
-  title: 'User Management | Nexora Admin',
+  title: 'User Management | Credifon Admin',
   description: 'Manage users and roles',
 };
 

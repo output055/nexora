@@ -139,7 +139,7 @@ export async function updateDeviceAssetOwner(deviceId: string, customerName: str
       headers: getScalefusionHeaders(),
       body: JSON.stringify({
         device: {
-          name: `Nexora: ${customerName}`,
+          name: `Credifon: ${customerName}`,
         }
       }),
     });

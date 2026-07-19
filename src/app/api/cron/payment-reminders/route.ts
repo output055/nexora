@@ -69,7 +69,7 @@ export async function GET(request: Request) {
 
       if (shouldWarn) {
         const whenDue = daysUntilDue === 0 ? 'TODAY' : `in ${daysUntilDue} day${daysUntilDue > 1 ? 's' : ''}`;
-        const msg = `Hi ${cust.full_name}, your Nexora device payment of GH₵${device.payment_cycle_amount} is due ${whenDue} (${nextDate.toLocaleDateString()}). Please pay to avoid service interruption.`;
+        const msg = `Hi ${cust.full_name}, your Credifon device payment of GHS ${Number(device.payment_cycle_amount).toFixed(2)} is due ${whenDue} (${nextDate.toLocaleDateString()}). Please pay to avoid service interruption.`;
         
         await sendSMS(cust.phone_number, msg);
         messagesSent++;

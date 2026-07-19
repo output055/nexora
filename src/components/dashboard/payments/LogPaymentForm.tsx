@@ -45,7 +45,7 @@ export default function LogPaymentForm({ customerId, deviceId, remainingBalance,
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            email: customerEmail || 'customer@nexora.test',
+            email: customerEmail || 'customer@credifon.test',
             amount: Number(amount),
             metadata: { customerId, deviceId },
           }),

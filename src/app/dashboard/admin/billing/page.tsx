@@ -56,7 +56,7 @@ export default function AdminBillingPage() {
 
   const config = {
     reference: (new Date()).getTime().toString() + '-' + Math.floor(Math.random() * 1000000),
-    email: user?.email || 'admin@nexora.com',
+    email: user?.email || 'admin@credifon.com',
     amount: Math.round(totalCostGHS * 100), // convert to pesewas
     publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || 'pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
     currency: 'GHS',
@@ -118,7 +118,7 @@ export default function AdminBillingPage() {
           <CreditCard className="text-blue-500" />
           Billing & Subscription
         </h2>
-        <p className="text-slate-400 text-sm mt-1">Manage your Nexora platform subscription and view your current device usage.</p>
+        <p className="text-slate-400 text-sm mt-1">Manage your Credifon platform subscription and view your current device usage.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

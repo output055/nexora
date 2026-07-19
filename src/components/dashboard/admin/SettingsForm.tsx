@@ -34,7 +34,7 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
     initialSettings['sms_api_key'] || ''
   );
   const [smsSenderId, setSmsSenderId] = useState(
-    initialSettings['sms_sender_id'] || 'NEXORA'
+    initialSettings['sms_sender_id'] || 'CREDIFON'
   );
 
   const [loading, setLoading] = useState(false);
@@ -153,7 +153,7 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
                 value={smsSenderId}
                 onChange={(e) => setSmsSenderId(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-                placeholder="NEXORA"
+                placeholder="CREDIFON"
               />
             </div>
           </div>

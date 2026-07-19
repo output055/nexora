@@ -41,7 +41,7 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
   const { data: usersData } = await adminClient.auth.admin.listUsers();
   const usersMap = new Map(usersData?.users.map((u) => [u.id, u.user_metadata?.full_name || u.email]) || []);
 
-  const adminEmail = await getSystemSetting('admin_paystack_email') || 'admin@nexora.com';
+  const adminEmail = await getSystemSetting('admin_paystack_email') || 'admin@credifon.com';
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8">
