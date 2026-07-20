@@ -22,6 +22,7 @@ export async function GET(request: Request) {
         id, 
         mdm_device_id, 
         customer_id, 
+        payment_status,
         payment_cycle_amount,
         customers (
           id,
