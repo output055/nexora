@@ -1,6 +1,8 @@
 import { MDMDashboard } from '@/components/mdm/MDMDashboard';
 import { getDevicesAction, getAllDeviceLocationsAction } from '@/app/actions/devices';
 
+export const dynamic = 'force-dynamic';
+
 export default async function MDMPage() {
   // Fetch initial data on the server
   const [devicesRes, locationsRes] = await Promise.all([
