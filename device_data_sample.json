@@ -1,0 +1,133 @@
+[
+  {
+    "managed_status": "2",
+    "device_id": "224696000000120220",
+    "battery_level": "28.0",
+    "is_supervised": true,
+    "os_version": "16",
+    "is_lost_mode_enabled": false,
+    "serial_number": "39271JEHN09503",
+    "device_type": "1",
+    "owned_by": "1",
+    "is_removed": "false",
+    "product_name": "Pixel 7a",
+    "device_name": "asamoahclement055_Pixel 7a",
+    "platform_type": "android",
+    "located_time": "1783933567805",
+    "wifi_mac": "94:45:60:1f:4a:1d",
+    "imei": [
+      "353529405855264",
+      "353529405855272"
+    ],
+    "model": "Pixel 7a",
+    "customer_name": "ACtechs",
+    "customer_id": "224696000000120014",
+    "udid": "3f99763794e27ffb",
+    "last_contact_time": "1783948202096",
+    "platform_type_id": "2",
+    "user": {
+      "user_email": "asamoahclement055@gmail.com",
+      "user_id": "224696000000122055",
+      "user_name": "Clement Asamoah"
+    },
+    "device_capacity": "109.91"
+  },
+  {
+    "managed_status": "2",
+    "device_id": "224696000000130006",
+    "battery_level": "10.0",
+    "is_supervised": true,
+    "os_version": "16",
+    "is_lost_mode_enabled": true,
+    "serial_number": "RZCX114V8PD",
+    "device_type": "1",
+    "owned_by": "1",
+    "is_removed": "false",
+    "product_name": "SM-A546B",
+    "device_name": "Samsung_SM-A546B",
+    "platform_type": "android",
+    "located_time": "1783800399000",
+    "wifi_mac": "4c:66:a6:13:d6:6a",
+    "imei": [
+      "355450535070484",
+      "358533715070486"
+    ],
+    "model": "SM-A546B",
+    "customer_name": "ACtechs",
+    "customer_id": "224696000000120014",
+    "udid": "dff00dee6b95ae57",
+    "last_contact_time": "1783818305093",
+    "platform_type_id": "2",
+    "user": {
+      "user_email": "asamoahclement055@gmail.com",
+      "user_id": "224696000000122055",
+      "user_name": "Clement Asamoah"
+    },
+    "device_capacity": "105.81"
+  },
+  {
+    "managed_status": "2",
+    "device_id": "224696000000130200",
+    "battery_level": "52.0",
+    "is_supervised": true,
+    "os_version": "26.5",
+    "is_lost_mode_enabled": true,
+    "serial_number": "MJQM645PQG",
+    "device_type": "1",
+    "owned_by": "1",
+    "is_removed": "false",
+    "product_name": "iPhone14,5",
+    "device_name": "iPhone",
+    "platform_type": "ios",
+    "located_time": "1784042567000",
+    "wifi_mac": "20:04:84:bb:b0:d2",
+    "imei": [
+      "359175928206959",
+      "359175926854735"
+    ],
+    "model": "NLA73LL",
+    "customer_name": "ACtechs",
+    "customer_id": "224696000000120014",
+    "udid": "00008110-001E49313A23A01E",
+    "last_contact_time": "1784044028927",
+    "platform_type_id": "1",
+    "user": {
+      "user_email": "<YOUR_SITE_NAME>@gmail.com",
+      "user_id": "224696000000134003",
+      "user_name": "<YOUR_SITE_NAME>@gmail.com"
+    },
+    "device_capacity": "128.0"
+  },
+  {
+    "managed_status": "2",
+    "device_id": "224696000000130228",
+    "battery_level": "34.0",
+    "is_supervised": true,
+    "os_version": "16.7.10",
+    "is_lost_mode_enabled": false,
+    "serial_number": "F2MV8751JCM2",
+    "device_type": "1",
+    "owned_by": "1",
+    "is_removed": "false",
+    "product_name": "iPhone10,5",
+    "device_name": "iPhone",
+    "platform_type": "ios",
+    "located_time": "1784110999000",
+    "wifi_mac": "b0:19:c6:d3:70:1d",
+    "imei": [
+      "356775080964379"
+    ],
+    "model": "MQ8L2ZD",
+    "customer_name": "ACtechs",
+    "customer_id": "224696000000120014",
+    "udid": "6cc226a7805289afae36d78e077a1a41af07cf25",
+    "last_contact_time": "1784111709137",
+    "platform_type_id": "1",
+    "user": {
+      "user_email": "adutwumdamoah@hovanprime.com",
+      "user_id": "224696000000134012",
+      "user_name": "adutwumdamoah@hovanprime.com"
+    },
+    "device_capacity": "64.0"
+  }
+]

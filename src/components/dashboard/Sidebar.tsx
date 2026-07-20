@@ -16,7 +16,13 @@ import {
   FileText,
   ShieldCheck,
   Smartphone,
+  Map,
   X,
+  TrendingUp,
+  Bell,
+  Send,
+  MessageSquare,
+  List,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -42,12 +48,14 @@ const adminNavItems: NavItem[] = [
     icon: <LayoutDashboard size={18} />,
     permission: 'view_analytics',
   },
+
   {
     label: 'Device Management',
     href: '/dashboard/admin/devices',
     icon: <Smartphone size={18} />,
     permission: 'manage_devices',
   },
+
   {
     label: 'Customer Directory',
     href: '/dashboard/admin/customers',
@@ -61,21 +69,92 @@ const adminNavItems: NavItem[] = [
     permission: 'view_audit_logs',
   },
   {
+    label: 'Communications',
+    icon: <Bell size={18} />,
+    subItems:[
+      {
+        label: 'Notifications',
+        href: '/dashboard/admin/notifications',
+        icon: <Bell size={16} />,
+        permission: 'view_notifications' // Optional permission, assume all users can view their own
+      },
+      {
+        label: 'SMS Broadcasts',
+        href: '/dashboard/admin/communications/broadcasts',
+        icon: <Send size={16} />,
+        permission: 'manage_settings' // Reusing a high-level permission for SMS
+      },
+      {
+        label: 'SMS Logs',
+        href: '/dashboard/admin/communications/logs',
+        icon: <List size={16} />,
+        permission: 'view_audit_logs'
+      },
+      {
+        label: 'Automated Triggers',
+        href: '/dashboard/admin/communications/settings',
+        icon: <MessageSquare size={16} />,
+        permission: 'manage_settings'
+      }
+    ]
+  },
+  {
     label: 'Administration',
     icon: <Shield size={18} />,
     subItems: [
-      { label: 'System Users', href: '/dashboard/admin/users', icon: <Users size={16} />, permission: 'manage_roles' },
+      {
+        label: 'MDM',
+        href: '/dashboard/admin/mdm',
+        icon: <Map size={18} />,
+        permission: 'manage_devices',
+      },
+      {
+        label: 'Reports & Analytics',
+        href: '/dashboard/admin/reports',
+        icon: <TrendingUp size={18} />,
+        permission: 'view_analytics',
+      },
+      { label: 'System Users', href: '/dashboard/admin/users', icon: <Users size={16} />, permission: 'manage_users' },
       { label: 'Roles & Permissions', href: '/dashboard/admin/settings', icon: <ShieldCheck size={16} />, permission: 'manage_roles' },
+      { label: 'System Settings', href: '/dashboard/admin/system-settings', icon: <Settings size={16} />, permission: 'view_settings' },
+      { label: 'Billing & Subscription', href: '/dashboard/admin/billing', icon: <CreditCard size={16} />, permission: 'view_settings' },
     ],
   },
+
 ];
 
 const retailerNavItems: NavItem[] = [
   {
-    label: 'Field Collections',
-    href: '/dashboard/retailer',
-    icon: <CreditCard size={18} />,
-    permission: 'log_payment',
+    label: 'Overview',
+    href: '/dashboard/agent',
+    icon: <LayoutDashboard size={18} />,
+  },
+  {
+    label: 'Customer Directory',
+    href: '/dashboard/admin/customers',
+    icon: <Users size={18} />,
+    permission: 'view_customers',
+  },
+];
+
+const customerNavItems: NavItem[] = [
+  {
+    label: 'My Dashboard',
+    href: '/dashboard/customer',
+    icon: <LayoutDashboard size={18} />,
+    permission: 'view_own_device',
+  },
+  {
+    label: 'Payment History',
+    href: '/dashboard/customer/history',
+    icon: <FileText size={18} />,
+    permission: 'view_own_payments',
+  },
+  {
+    label: 'Help & Support',
+    href: '/dashboard/customer/support',
+    icon: <Shield size={18} />,
+    permission: 'view_own_device',
   },
 ];
 
@@ -88,8 +167,9 @@ export function DashboardSidebar() {
 
   const isRetailer = user?.roles.some((r) => ['field_agent', 'shop_manager'].includes(r.name)) &&
     !user?.roles.some((r) => ['admin', 'superadmin'].includes(r.name));
+  const isCustomer = user?.roles.some((r) => r.name === 'customer');
 
-  const navItems = isRetailer ? retailerNavItems : adminNavItems;
+  const navItems = isCustomer ? customerNavItems : (isRetailer ? retailerNavItems : adminNavItems);
 
   useEffect(() => {
     navItems.forEach((item) => {
@@ -151,7 +231,7 @@ export function DashboardSidebar() {
               <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
                 <Smartphone size={16} className="text-blue-400" />
               </div>
-              <span className="font-bold text-white text-lg tracking-tight">Nexora</span>
+              <span className="font-bold text-white text-lg tracking-tight">Credifon</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -268,13 +348,18 @@ export function DashboardSidebar() {
             </Link>
           );
         })}
-        </nav>
+      </nav>
 
       {/* Bottom settings link */}
-      {!isRetailer && (
+      {loading ? (
+        <div className="p-3 border-t border-sidebar-border shrink-0 animate-pulse">
+          <div className="h-10 rounded-xl bg-white/5" />
+        </div>
+      ) : (!isRetailer && !isCustomer) && (
         <div className="p-3 border-t border-sidebar-border shrink-0">
-          <Link
+          {/* <Link
             href="/dashboard/admin/settings"
+            suppressHydrationWarning
             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors
               ${pathname === '/dashboard/admin/settings' ? 'bg-blue-500/10 text-blue-400' : 'text-slate-500 hover:bg-white/5 hover:text-slate-200'}
               ${collapsed ? 'justify-center' : ''}
@@ -283,7 +368,7 @@ export function DashboardSidebar() {
           >
             <Settings size={18} />
             {!collapsed && <span>Settings</span>}
-          </Link>
+          </Link> */}
         </div>
       )}
     </div>
@@ -329,9 +414,8 @@ export function DashboardSidebar() {
 
       {/* Desktop sidebar */}
       <aside
-        className={`hidden lg:flex flex-col h-screen sticky top-0 border-r border-sidebar-border bg-[#0D1526] transition-all duration-300 shrink-0 ${
-          collapsed ? 'w-[68px]' : 'w-[260px]'
-        }`}
+        className={`hidden lg:flex flex-col h-screen sticky top-0 border-r border-sidebar-border bg-[#0D1526] transition-all duration-300 shrink-0 ${collapsed ? 'w-[68px]' : 'w-[260px]'
+          }`}
       >
         {renderContent()}
       </aside>

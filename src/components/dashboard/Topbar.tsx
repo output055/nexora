@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { LogOut, User, ChevronDown, Bell } from 'lucide-react';
 import { getInitials } from '@/lib/utils';
+import { NotificationBell } from './NotificationBell';
 
 const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   '/dashboard/admin': { title: 'Overview', subtitle: 'High-level portfolio tracking and analytics.' },
@@ -40,14 +41,7 @@ export function Topbar() {
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Notification bell placeholder */}
-        <button
-          id="topbar-notifications"
-          className="relative p-2 rounded-xl hover:bg-white/5 transition-colors text-slate-400 hover:text-white"
-        >
-          <Bell size={18} />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-500 border border-[#111827]" />
-        </button>
+        <NotificationBell />
 
         {/* User menu */}
         {user && (

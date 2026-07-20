@@ -27,11 +27,11 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 async function runSeed() {
   console.log("Seeding customers...");
   const { error: customerError } = await supabase.from('customers').insert([
-    { full_name: 'Adekunle Gold', phone_number: '+2348001112222', os_platform: 'iOS', device_model: 'iPhone 15 Pro', miradore_device_id: 'MDM-IOS-1001', total_owed: 1200000, remaining_balance: 450000, payment_status: 'current' },
-    { full_name: 'Burna Boy', phone_number: '+2348003334444', os_platform: 'Android', device_model: 'Samsung Galaxy S24', miradore_device_id: 'MDM-AND-2001', total_owed: 950000, remaining_balance: 950000, payment_status: 'overdue' },
-    { full_name: 'Tiwa Savage', phone_number: '+2348005556666', os_platform: 'iOS', device_model: 'iPhone 14', miradore_device_id: 'MDM-IOS-1002', total_owed: 800000, remaining_balance: 0, payment_status: 'current' },
-    { full_name: 'Davido Adeleke', phone_number: '+2348007778888', os_platform: 'Android', device_model: 'Google Pixel 8', miradore_device_id: 'MDM-AND-2002', total_owed: 850000, remaining_balance: 200000, payment_status: 'current' },
-    { full_name: 'Wizkid Balogun', phone_number: '+2348009990000', os_platform: 'iOS', device_model: 'iPhone 15', miradore_device_id: 'MDM-IOS-1003', total_owed: 1000000, remaining_balance: 800000, payment_status: 'overdue' }
+    { full_name: 'Adekunle Gold', phone_number: '+2348001112222', os_platform: 'iOS', device_model: 'iPhone 15 Pro', mdm_device_id: 'MDM-IOS-1001', total_owed: 1200000, remaining_balance: 450000, payment_status: 'current' },
+    { full_name: 'Burna Boy', phone_number: '+2348003334444', os_platform: 'Android', device_model: 'Samsung Galaxy S24', mdm_device_id: 'MDM-AND-2001', total_owed: 950000, remaining_balance: 950000, payment_status: 'overdue' },
+    { full_name: 'Tiwa Savage', phone_number: '+2348005556666', os_platform: 'iOS', device_model: 'iPhone 14', mdm_device_id: 'MDM-IOS-1002', total_owed: 800000, remaining_balance: 0, payment_status: 'current' },
+    { full_name: 'Davido Adeleke', phone_number: '+2348007778888', os_platform: 'Android', device_model: 'Google Pixel 8', mdm_device_id: 'MDM-AND-2002', total_owed: 850000, remaining_balance: 200000, payment_status: 'current' },
+    { full_name: 'Wizkid Balogun', phone_number: '+2348009990000', os_platform: 'iOS', device_model: 'iPhone 15', mdm_device_id: 'MDM-IOS-1003', total_owed: 1000000, remaining_balance: 800000, payment_status: 'overdue' }
   ]);
 
   if (customerError) console.error("Error seeding customers:", customerError);

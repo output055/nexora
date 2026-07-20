@@ -66,7 +66,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 mb-4">
             <Smartphone className="w-8 h-8 text-blue-400" />
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Nexora</h1>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Credifon</h1>
           <p className="text-sm text-slate-400 mt-1.5">Smartphone Financing & Asset Tracking</p>
         </div>
 
@@ -98,7 +98,7 @@ export default function LoginPage() {
                   id="login-email"
                   type="email"
                   autoComplete="email"
-                  placeholder="admin@nexora.dev"
+                  placeholder="admin@credifon.dev"
                   {...register('email')}
                   className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
                 />
@@ -153,16 +153,16 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-5 pt-5 border-t border-white/5">
+          {/* <div className="mt-5 pt-5 border-t border-white/5">
             <p className="text-xs text-center text-slate-500">
               <span className="font-medium text-blue-400">Demo mode:</span>{' '}
               Any credentials work when Supabase is not configured.
             </p>
-          </div>
+          </div> */}
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-6">
-          © 2025 Nexora. All rights reserved.
+          © 2025 Credifon. All rights reserved.
         </p>
       </motion.div>
     </div>

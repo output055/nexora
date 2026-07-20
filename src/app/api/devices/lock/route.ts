@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { lockDevice } from '@/lib/miradore';
-import type { MiradoreDeviceLockPayload } from '@/types';
+import { lockDevice } from '@/lib/scalefusion';
+import type { MdmDeviceLockPayload } from '@/types';
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     // ── 4. Fetch customer record ──────────────────────────────────────────────
     const { data: customer, error: custError } = await supabase
       .from('customers')
-      .select('id, full_name, miradore_device_id, os_platform')
+      .select('id, full_name, mdm_device_id, os_platform')
       .eq('id', body.customerId)
       .single();
 
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     const contactPhone = process.env.LOCK_CONTACT_PHONE ?? '+1-800-000-0000';
     const footnote = process.env.LOCK_FOOTNOTE_TEXT ?? 'Please pay your outstanding balance to unlock this device.';
 
-    const lockPayload: MiradoreDeviceLockPayload = {
+    const lockPayload: MdmDeviceLockPayload = {
       NotificationText: `This device has been locked due to an overdue balance. Please call ${contactPhone} to make a payment.`,
       PhoneNumber: contactPhone,
       FootnoteText: footnote,
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     // ── 6. Fire Miradore lock command ──────────────────────────────────────────
     const mirResult = await lockDevice(
-      customer.miradore_device_id,
+      customer.mdm_device_id,
       customer.os_platform,
       lockPayload
     );
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     // ── 8. Write audit log ────────────────────────────────────────────────────
     await supabase.from('audit_logs').insert({
       actor_name: user.email ?? 'Unknown',
-      action_description: `Triggered LOCK on device ${customer.miradore_device_id} (${customer.full_name}) — ${customer.os_platform} ${customer.os_platform === 'iOS' ? 'Lost Mode' : 'Device Lock'} activated`,
+      action_description: `Triggered LOCK on device ${customer.mdm_device_id} (${customer.full_name}) — ${customer.os_platform} ${customer.os_platform === 'iOS' ? 'Lost Mode' : 'Device Lock'} activated`,
     });
 
     return NextResponse.json({

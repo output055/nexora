@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { updateDeviceAssetOwner } from '@/lib/miradore';
+import { calculatePaymentPlan, calculateNextPaymentDate } from '@/lib/utils/calculator';
+import { getSystemSetting } from '@/app/actions/settings';
+import { sendSMS } from '@/lib/sms';
 import type { Customer, OsPlatform, PaymentCycle, ResidentialStatus } from '@/types';
 
 type RegisterDevicePayload = {
   full_name: string;
+  email: string;
   phone_number: string;
   ghana_card_id: string;
   alternative_phone_number: string;
@@ -19,8 +22,15 @@ type RegisterDevicePayload = {
   payment_cycle: PaymentCycle;
   os_platform: OsPlatform;
   device_model: string;
-  miradore_device_id: string;
-  total_owed: number;
+  mdm_device_id: string;
+  imei: string;
+  serial_number: string;
+  os_version: string;
+  base_price: number;
+  contract_duration_months: number;
+  interest_rate?: number;
+  down_payment_type?: 'percentage' | 'fixed';
+  down_payment_value?: number;
   ghana_card_scan: File;
 };
 
@@ -38,6 +48,7 @@ function parseRegisterPayload(formData: FormData):
   | { error: string } {
   const payload = {
     full_name: cleanString(formData, 'full_name'),
+    email: cleanString(formData, 'email').toLowerCase(),
     phone_number: cleanString(formData, 'phone_number'),
     ghana_card_id: cleanString(formData, 'ghana_card_id').toUpperCase(),
     alternative_phone_number: cleanString(formData, 'alternative_phone_number'),
@@ -51,22 +62,31 @@ function parseRegisterPayload(formData: FormData):
     payment_cycle: cleanString(formData, 'payment_cycle'),
     os_platform: cleanString(formData, 'os_platform'),
     device_model: cleanString(formData, 'device_model'),
-    miradore_device_id: cleanString(formData, 'miradore_device_id'),
-    total_owed: Number(cleanString(formData, 'total_owed')),
-    ghana_card_scan: formData.get('ghana_card_scan'),
+    mdm_device_id: cleanString(formData, 'mdm_device_id'),
+    imei: cleanString(formData, 'imei'),
+    serial_number: cleanString(formData, 'serial_number'),
+    os_version: cleanString(formData, 'os_version'),
+    base_price: Number(cleanString(formData, 'base_price')),
+    contract_duration_months: Number(cleanString(formData, 'contract_duration_months')),
+    interest_rate: cleanString(formData, 'interest_rate') ? Number(cleanString(formData, 'interest_rate')) : undefined,
+    down_payment_type: cleanString(formData, 'down_payment_type') as 'percentage' | 'fixed' || undefined,
+    down_payment_value: cleanString(formData, 'down_payment_value') ? Number(cleanString(formData, 'down_payment_value')) : undefined,
+    ghana_card_scan: formData.get('ghana_card_scan') as File | null,
   };
 
   if (!payload.device_model) return { error: 'Device model is required.' };
-  if (!payload.miradore_device_id) return { error: 'Miradore device id, serial, or IMEI is required.' };
+  if (!payload.mdm_device_id) return { error: 'MDM device id is required.' };
   if (!['iOS', 'Android'].includes(payload.os_platform)) return { error: 'os_platform must be iOS or Android.' };
-  if (!Number.isFinite(payload.total_owed) || payload.total_owed <= 0) return { error: 'Total financed amount must be a positive number.' };
+  if (!Number.isFinite(payload.base_price) || payload.base_price <= 0) return { error: 'Base price must be a positive number.' };
+  if (!Number.isFinite(payload.contract_duration_months) || payload.contract_duration_months <= 0) return { error: 'Contract duration must be a positive number of months.' };
 
   if (!payload.ghana_card_id) return { error: 'Ghana Card ID is required.' };
   if (!GHANA_CARD_PATTERN.test(payload.ghana_card_id)) return { error: 'Ghana Card ID must match GHA-XXXXXXXXX-X.' };
-  if (!(payload.ghana_card_scan instanceof File) || payload.ghana_card_scan.size === 0) return { error: 'Ghana Card scan/photo is required.' };
+  if (!payload.ghana_card_scan || !payload.ghana_card_scan.size) return { error: 'Ghana Card scan/photo is required.' };
   if (payload.ghana_card_scan.size > MAX_SCAN_BYTES) return { error: 'Ghana Card scan must be 8MB or smaller.' };
   if (!ALLOWED_SCAN_TYPES.has(payload.ghana_card_scan.type)) return { error: 'Ghana Card scan must be a JPG, PNG, WebP, or PDF file.' };
   if (!payload.full_name) return { error: 'Full legal name is required.' };
+  if (!payload.email) return { error: 'Email address is required.' };
 
   if (!payload.phone_number) return { error: 'Primary phone number is required.' };
   if (!payload.alternative_phone_number) return { error: 'Alternative or emergency phone number is required.' };
@@ -125,7 +145,7 @@ export async function POST(request: NextRequest) {
     const { data: existingDevice } = await admin
       .from('customers')
       .select('id')
-      .eq('miradore_device_id', payload.miradore_device_id)
+      .eq('mdm_device_id', payload.mdm_device_id)
       .maybeSingle();
 
     if (existingDevice) {
@@ -142,7 +162,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'This Ghana Card ID is already registered.' }, { status: 409 });
     }
 
-    const scanPath = `${payload.ghana_card_id}/${Date.now()}-${payload.miradore_device_id}.${getScanExtension(payload.ghana_card_scan)}`;
+    const scanPath = `${payload.ghana_card_id}/${Date.now()}-${payload.mdm_device_id}.${getScanExtension(payload.ghana_card_scan)}`;
     const { error: uploadError } = await admin.storage
       .from('ghana-card-scans')
       .upload(scanPath, payload.ghana_card_scan, {
@@ -154,10 +174,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: uploadError.message }, { status: 500 });
     }
 
+    // Generate random 6-character password
+    const rawPassword = Math.random().toString(36).slice(-6).toUpperCase();
+    
+    // Auto-create Auth User
+    const { data: authUser, error: createUserError } = await admin.auth.admin.createUser({
+      email: payload.email,
+      password: rawPassword,
+      email_confirm: true,
+      user_metadata: { full_name: payload.full_name }
+    });
+
+    if (createUserError) {
+      // If user already exists or other auth error
+      await admin.storage.from('ghana-card-scans').remove([scanPath]);
+      return NextResponse.json({ success: false, error: `Failed to create login account: ${createUserError.message}` }, { status: 500 });
+    }
+
+    // Assign 'customer' role
+    const { data: customerRole } = await admin.from('roles').select('id').eq('name', 'customer').single();
+    if (customerRole) {
+      await admin.from('user_roles').insert({
+        user_id: authUser.user.id,
+        role_id: customerRole.id
+      });
+    }
+
     const { data: customer, error: customerError } = await admin
       .from('customers')
       .insert({
         full_name: payload.full_name,
+        email: payload.email,
+        user_id: authUser.user.id,
         phone_number: payload.phone_number,
         ghana_card_id: payload.ghana_card_id,
         ghana_card_scan_path: scanPath,
@@ -170,12 +218,6 @@ export async function POST(request: NextRequest) {
         occupation: payload.occupation,
         place_of_work: payload.place_of_work,
         payment_cycle: payload.payment_cycle,
-        os_platform: payload.os_platform,
-        device_model: payload.device_model,
-        miradore_device_id: payload.miradore_device_id,
-        total_owed: payload.total_owed,
-        remaining_balance: payload.total_owed,
-        payment_status: 'current',
       })
       .select('*')
       .single();
@@ -188,12 +230,75 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const interestRateStr = await getSystemSetting('payment_interest_rate');
+    const downPaymentRateStr = await getSystemSetting('payment_down_payment_rate');
+    
+    // If the frontend provided an interest rate, use it; otherwise fallback to global setting
+    const interestRate = payload.interest_rate !== undefined ? payload.interest_rate : (interestRateStr ? Number(interestRateStr) : 30);
+    
+    // For down payment, if the frontend provided a value, we pass it depending on the type
+    let downPaymentRate = downPaymentRateStr ? Number(downPaymentRateStr) : 40;
+    let downPaymentType = payload.down_payment_type || 'percentage';
+    let downPaymentFixedAmount: number | undefined = undefined;
+
+    if (payload.down_payment_value !== undefined) {
+      if (downPaymentType === 'percentage') {
+        downPaymentRate = payload.down_payment_value;
+      } else {
+        downPaymentFixedAmount = payload.down_payment_value;
+      }
+    }
+
+    const plan = calculatePaymentPlan({
+      basePrice: payload.base_price,
+      durationMonths: payload.contract_duration_months,
+      cycle: payload.payment_cycle,
+      interestRate,
+      downPaymentRate,
+      downPaymentType,
+      downPaymentFixedAmount
+    });
+
+    const nextPaymentDate = calculateNextPaymentDate(new Date(), payload.payment_cycle);
+
+    const { data: device, error: deviceError } = await admin
+      .from('devices')
+      .insert({
+        customer_id: customer.id,
+        os_platform: payload.os_platform,
+        device_model: payload.device_model,
+        mdm_device_id: payload.mdm_device_id,
+        imei: payload.imei || null,
+        serial_number: payload.serial_number || null,
+        os_version: payload.os_version || null,
+        base_price: plan.basePrice,
+        contract_duration_months: payload.contract_duration_months,
+        down_payment: plan.downPayment,
+        payment_cycle_amount: plan.paymentCycleAmount,
+        total_owed: plan.totalContractValue,
+        remaining_balance: plan.totalContractValue,
+        next_payment_date: nextPaymentDate.toISOString(),
+        payment_status: 'overdue',
+      })
+      .select('*')
+      .single();
+
+    if (deviceError || !device) {
+      await admin.from('customers').delete().eq('id', customer.id);
+      await admin.storage.from('ghana-card-scans').remove([scanPath]);
+      return NextResponse.json(
+        { success: false, error: deviceError?.message ?? 'Unable to link device.' },
+        { status: 500 }
+      );
+    }
+
     const { error: auditError } = await admin.from('audit_logs').insert({
       actor_name: user.email ?? 'Unknown',
-      action_description: `Admin registered new ${payload.os_platform} device ${payload.miradore_device_id} to customer ${payload.full_name} (${payload.ghana_card_id})`,
+      action_description: `Admin registered new ${payload.os_platform} device ${payload.mdm_device_id} to customer ${payload.full_name} (${payload.ghana_card_id})`,
     });
 
     if (auditError) {
+      await admin.from('devices').delete().eq('id', device.id);
       await admin.from('customers').delete().eq('id', customer.id);
       await admin.storage.from('ghana-card-scans').remove([scanPath]);
       return NextResponse.json({ success: false, error: auditError.message }, { status: 500 });
@@ -201,26 +306,28 @@ export async function POST(request: NextRequest) {
 
     let miradoreSync = { attempted: false, success: false, error: undefined as string | undefined };
 
-    if (payload.os_platform === 'iOS') {
-      const result = await updateDeviceAssetOwner(payload.miradore_device_id, payload.full_name);
-      miradoreSync = {
-        attempted: true,
-        success: result.success,
-        error: result.message,
-      };
+    // Placeholder for future ManageEngine device rename/sync if needed
+    // if (payload.os_platform === 'iOS') { ... }
 
-      if (!result.success) {
-        await admin.from('audit_logs').insert({
-          actor_name: 'System (auto)',
-          action_description: `Miradore asset sync failed for ${payload.miradore_device_id} (${payload.full_name}) - ${result.message ?? 'unknown error'}`,
-        });
-      }
-    }
+    // Merge the inserted device fields into the customer object for the frontend
+    const mergedCustomer = {
+      ...customer,
+      device_model: device.device_model,
+      remaining_balance: device.remaining_balance,
+      total_owed: device.total_owed,
+      mdm_device_id: device.mdm_device_id,
+    };
+
+    // Send Welcome SMS
+    await sendSMS(
+      payload.phone_number,
+      `Credifon: Device registered! GHS ${Number(plan.paymentCycleAmount).toFixed(2)} due ${nextPaymentDate.toLocaleDateString('en-GB')}. Login: ${process.env.NEXT_PUBLIC_APP_URL || 'credifon.app'} User: ${payload.email} Pw: ${rawPassword}`
+    );
 
     return NextResponse.json({
       success: true,
       data: {
-        customer: customer as Customer,
+        customer: mergedCustomer as Customer,
         miradoreSync,
       },
     });
@@ -232,3 +339,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+// trigger recompilation

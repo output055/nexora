@@ -13,7 +13,7 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.
 
 async function test() {
   const { data: { session }, error: loginError } = await supabase.auth.signInWithPassword({
-    email: 'actechns@gmail.com',
+    email: '<YOUR_SITE_NAME>@gmail.com',
     password: 'red_tiger'
   });
   

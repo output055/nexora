@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { fetchUnassignedAppleDevices } from '@/lib/miradore';
+import { fetchManageEngineProfiles } from '@/lib/manageengine';
 
 export async function GET() {
   try {
@@ -23,18 +23,18 @@ export async function GET() {
       );
     }
 
-    const devices = await fetchUnassignedAppleDevices();
+    const profiles = await fetchManageEngineProfiles();
 
     return NextResponse.json({
       success: true,
-      data: devices,
+      data: profiles,
     });
   } catch (error) {
-    console.error('[/api/devices/unassigned]', error);
+    console.error('[/api/devices/profiles] Server Error:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unable to fetch unassigned devices.',
+        error: error instanceof Error ? error.message : 'Unable to fetch device profiles.',
       },
       { status: 500 }
     );

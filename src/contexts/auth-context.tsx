@@ -2,26 +2,16 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 import type { AuthContextValue, UserProfile } from '@/types';
-import { mockRoles } from '@/lib/mock-data';
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-// ── Demo user for local dev when Supabase is not configured ───────────────────
-const DEMO_USER: UserProfile = {
-  id: 'demo-admin-001',
-  email: 'admin@nexora.dev',
-  full_name: 'Demo Admin',
-  roles: mockRoles.filter((r) => r.name === 'superadmin'),
-  permissions: mockRoles.find((r) => r.name === 'superadmin')?.permissions.map((p) => p.name) ?? [],
-};
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const supabaseConfigured =
-    !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const [user, setUser] = useState<UserProfile | null>(supabaseConfigured ? null : DEMO_USER);
-  const [loading, setLoading] = useState(supabaseConfigured);
+  const router = useRouter();
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchUserProfile = useCallback(
     async (userId: string, email: string): Promise<UserProfile> => {
@@ -50,9 +40,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    if (!supabaseConfigured) {
-      return;
-    }
 
     const supabase = createBrowserSupabaseClient();
     let mounted = true;
@@ -122,27 +109,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [supabaseConfigured, fetchUserProfile]);
+  }, [fetchUserProfile]);
 
   const login = useCallback(async (email: string, password: string): Promise<{ error?: string }> => {
-    if (!supabaseConfigured) {
-      setUser(DEMO_USER);
-      return {};
-    }
     const supabase = createBrowserSupabaseClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return error ? { error: error.message } : {};
-  }, [supabaseConfigured]);
+  }, []);
 
   const logout = useCallback(async () => {
-    if (!supabaseConfigured) {
-      setUser(null);
-      return;
-    }
     const supabase = createBrowserSupabaseClient();
     await supabase.auth.signOut();
     setUser(null);
-  }, [supabaseConfigured]);
+    router.push('/login');
+  }, [router]);
 
   const hasPermission = useCallback(
     (permission: string) => {

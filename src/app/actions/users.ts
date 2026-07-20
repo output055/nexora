@@ -18,8 +18,12 @@ type UserRoleRow = {
   roles: JoinedRole | JoinedRole[] | null;
 };
 
-const getErrorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : 'An unexpected error occurred';
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error) return String((error as any).message);
+  if (typeof error === 'string') return error;
+  return 'An unexpected error occurred';
+};
 
 const getJoinedRole = (role: UserRoleRow['roles']) =>
   Array.isArray(role) ? role[0] ?? null : role;
@@ -122,21 +126,15 @@ export async function updateUserRole(userId: string, roleId: string) {
   try {
     const supabase = getAdminClient();
     
-    // Check if mapping exists
-    const { data } = await supabase.from('user_roles').select('*').eq('user_id', userId).single();
-    
-    let error;
-    if (data) {
-      // Update
-      const result = await supabase.from('user_roles').update({ role_id: roleId }).eq('user_id', userId);
-      error = result.error;
-    } else {
-      // Insert
-      const result = await supabase.from('user_roles').insert({ user_id: userId, role_id: roleId });
-      error = result.error;
-    }
+    // Delete any existing roles for this user
+    const { error: deleteError } = await supabase.from('user_roles').delete().eq('user_id', userId);
+    if (deleteError) throw deleteError;
 
-    if (error) throw error;
+    // If a valid roleId is provided, insert the new role
+    if (roleId) {
+      const { error: insertError } = await supabase.from('user_roles').insert({ user_id: userId, role_id: roleId });
+      if (insertError) throw insertError;
+    }
 
     revalidatePath('/dashboard/admin/users');
     return { success: true };
