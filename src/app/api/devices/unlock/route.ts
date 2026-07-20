@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
-import { unlockDevice } from '@/lib/miradore';
+import { unlockDevice } from '@/lib/scalefusion';
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     // ── 4. Fetch customer record ──────────────────────────────────────────────
     const { data: customer, error: custError } = await supabase
       .from('customers')
-      .select('id, full_name, miradore_device_id, os_platform, remaining_balance')
+      .select('id, full_name, mdm_device_id, os_platform, remaining_balance')
       .eq('id', body.customerId)
       .single();
 
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 5. Fire Miradore unlock command ───────────────────────────────────────
-    const mirResult = await unlockDevice(customer.miradore_device_id);
+    const mirResult = await unlockDevice(customer.mdm_device_id, customer.os_platform);
 
     if (!mirResult.success) {
       await supabase.from('audit_logs').insert({
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     const isAuto = body.isAutoUnlock === true;
     await supabase.from('audit_logs').insert({
       actor_name: isAuto ? 'System (auto)' : user.email ?? 'Unknown',
-      action_description: `${isAuto ? 'AUTO ' : ''}UNLOCK triggered for device ${customer.miradore_device_id} (${customer.full_name}) — balance cleared`,
+      action_description: `${isAuto ? 'AUTO ' : ''}UNLOCK triggered for device ${customer.mdm_device_id} (${customer.full_name}) — balance cleared`,
     });
 
     return NextResponse.json({

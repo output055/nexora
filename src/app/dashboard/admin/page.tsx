@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getCalculatedPaymentStatus } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import {
   DollarSign,
@@ -11,8 +12,8 @@ import {
 } from 'lucide-react';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -21,39 +22,126 @@ import {
 import { StatsCard } from '@/components/dashboard/admin/StatsCard';
 import { CustomerTable } from '@/components/dashboard/admin/CustomerTable';
 import { AuditLogStream } from '@/components/dashboard/admin/AuditLogStream';
-import { mockDashboardStats, collectionsChartData } from '@/lib/mock-data';
 import type { Customer } from '@/types';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 
 export default function AdminDashboard() {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [stats, setStats] = useState(mockDashboardStats);
+  const [stats, setStats] = useState<any>({
+    totalCapitalDeployed: 0,
+    activeAccounts: 0,
+    overdueAccounts: 0,
+    collectionsThisMonth: 0,
+    collectionsLastMonth: 0,
+    overdueRate: 0,
+  });
+  const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchCustomers = async () => {
+    const fetchDashboardData = async () => {
       const supabase = createBrowserSupabaseClient();
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .order('created_at', { ascending: false });
+      
+      const [
+        { data: customersData },
+        { data: devicesData },
+        { data: paymentsData }
+      ] = await Promise.all([
+        supabase.from('customers').select('*').order('created_at', { ascending: false }),
+        supabase.from('devices').select('id, payment_status, total_owed, remaining_balance, next_payment_date'),
+        supabase.from('payments').select('amount_paid, created_at, collection_date')
+      ]);
 
-      if (data && !error) {
-        setCustomers(data);
-        const totalCapital = data.reduce((sum, c) => sum + Number(c.total_owed), 0);
-        setStats(prev => ({ ...prev, totalCapitalDeployed: totalCapital }));
+      if (customersData) setCustomers(customersData);
+
+      let totalCapitalDeployed = 0;
+      let activeAccounts = 0;
+      let overdueAccounts = 0;
+
+      if (devicesData) {
+        totalCapitalDeployed = devicesData.reduce((sum, d) => sum + Number(d.total_owed), 0);
+        activeAccounts = devicesData.length;
+        overdueAccounts = devicesData.filter((d) => 
+          getCalculatedPaymentStatus(d.payment_status, d.remaining_balance || 0, d.next_payment_date) === 'overdue'
+        ).length;
       }
+
+      let collectionsThisMonth = 0;
+      let collectionsLastMonth = 0;
+      const now = new Date();
+      const newChartData = [];
+
+      if (paymentsData) {
+        // Calculate collections this month and last month
+        const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        collectionsThisMonth = paymentsData.reduce((sum, p) => {
+          const d = new Date(p.collection_date || p.created_at);
+          if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+            return sum + Number(p.amount_paid);
+          }
+          return sum;
+        }, 0);
+
+        collectionsLastMonth = paymentsData.reduce((sum, p) => {
+          const d = new Date(p.collection_date || p.created_at);
+          if (d.getMonth() === lastMonthDate.getMonth() && d.getFullYear() === lastMonthDate.getFullYear()) {
+            return sum + Number(p.amount_paid);
+          }
+          return sum;
+        }, 0);
+
+        // Update chart data with actuals for the last 6 months
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        for (let i = 5; i >= 0; i--) {
+          const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const monthLabel = monthNames[targetDate.getMonth()];
+          
+          const collected = paymentsData.reduce((sum, p) => {
+            const d = new Date(p.collection_date || p.created_at);
+            if (d.getMonth() === targetDate.getMonth() && d.getFullYear() === targetDate.getFullYear()) {
+              return sum + Number(p.amount_paid);
+            }
+            return sum;
+          }, 0);
+
+          newChartData.push({
+            month: monthLabel,
+            target: 0, // Targets not dynamically set from DB yet
+            collected,
+          });
+        }
+        // Reverse because we built it backwards or just build it directly in order?
+        // Wait, loop is 5 to 0, meaning oldest month first. So pushing is correct for chronological order.
+      }
+
+      setStats({
+        totalCapitalDeployed,
+        activeAccounts,
+        overdueAccounts,
+        collectionsThisMonth,
+        collectionsLastMonth,
+        overdueRate: activeAccounts > 0 ? (overdueAccounts / activeAccounts) * 100 : 0
+      });
+      setChartData(newChartData);
       setLoading(false);
     };
-    fetchCustomers();
+    fetchDashboardData();
   }, []);
 
   const handleCustomerUpdate = (id: string, updates: Partial<Customer>) => {
     setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
   };
 
-  const liveOverdue = customers.filter((c) => c.payment_status === 'overdue').length;
-  const liveActive = customers.length;
+  const formatCapital = (val: number) => {
+    if (val >= 1000000) return `GH₵${(val / 1000000).toFixed(2)}M total`;
+    if (val >= 1000) return `GH₵${(val / 1000).toFixed(0)}K total`;
+    return `GH₵${val} total`;
+  };
+
+  const collDiff = stats.collectionsThisMonth - (stats.collectionsLastMonth || 0);
+  const collDiffLabel = collDiff >= 0 
+    ? `▲ GH₵${(collDiff / 1000).toFixed(1)}K vs last month`
+    : `▼ GH₵${(Math.abs(collDiff) / 1000).toFixed(1)}K vs last month`;
 
   return (
     <motion.div
@@ -69,14 +157,14 @@ export default function AdminDashboard() {
           value={stats.totalCapitalDeployed}
           isCurrency
           trend="up"
-          trendLabel="GH₵2.175M total"
+          trendLabel={formatCapital(stats.totalCapitalDeployed)}
           icon={<DollarSign size={18} className="text-blue-400" />}
           iconBg="bg-blue-500/10"
           delay={0}
         />
         <StatsCard
           label="Active Accounts"
-          value={liveActive}
+          value={stats.activeAccounts}
           trend="neutral"
           trendLabel="Live data"
           icon={<Users size={18} className="text-emerald-400" />}
@@ -85,9 +173,9 @@ export default function AdminDashboard() {
         />
         <StatsCard
           label="Overdue Accounts"
-          value={liveOverdue}
-          trend={liveOverdue > 2 ? 'down' : 'up'}
-          trendLabel={`${((liveOverdue / liveActive) * 100).toFixed(0)}% overdue rate`}
+          value={stats.overdueAccounts}
+          trend={stats.overdueAccounts > 2 ? 'down' : 'up'}
+          trendLabel={`${stats.overdueRate.toFixed(0)}% overdue rate`}
           icon={<AlertTriangle size={18} className="text-red-400" />}
           iconBg="bg-red-500/10"
           delay={0.1}
@@ -96,8 +184,8 @@ export default function AdminDashboard() {
           label="Collected This Month"
           value={stats.collectionsThisMonth}
           isCurrency
-          trend="up"
-          trendLabel="▲ GH₵20K vs last month"
+          trend={collDiff >= 0 ? "up" : "down"}
+          trendLabel={collDiffLabel}
           icon={<TrendingUp size={18} className="text-amber-400" />}
           iconBg="bg-amber-500/10"
           delay={0.15}
@@ -129,7 +217,7 @@ export default function AdminDashboard() {
         </div>
         <div className="h-[220px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={collectionsChartData} barGap={6}>
+            <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
               <XAxis
                 dataKey="month"
@@ -153,11 +241,25 @@ export default function AdminDashboard() {
                   fontSize: '13px',
                 }}
                 formatter={(value: number) => [`GH₵${value.toLocaleString()}`, '']}
-                cursor={{ fill: 'rgba(255,255,255,0.02)' }}
+                cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1, strokeDasharray: '3 3' }}
               />
-              <Bar dataKey="target" fill="rgba(255,255,255,0.08)" radius={[4, 4, 4, 4]} barSize={32} />
-              <Bar dataKey="collected" fill="#3B82F6" radius={[4, 4, 4, 4]} barSize={32} />
-            </BarChart>
+              <Line 
+                type="monotone" 
+                dataKey="target" 
+                stroke="rgba(255,255,255,0.3)" 
+                strokeWidth={2} 
+                dot={false} 
+                strokeDasharray="5 5" 
+              />
+              <Line 
+                type="monotone" 
+                dataKey="collected" 
+                stroke="#3B82F6" 
+                strokeWidth={3} 
+                dot={{ r: 4, fill: "#3B82F6", strokeWidth: 0 }} 
+                activeDot={{ r: 6, fill: "#3B82F6", stroke: "rgba(59,130,246,0.3)", strokeWidth: 4 }} 
+              />
+            </LineChart>
           </ResponsiveContainer>
         </div>
       </motion.div>

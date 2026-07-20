@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { getCalculatedPaymentStatus } from '@/lib/utils';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -17,7 +18,10 @@ import {
   User,
   Unlock,
   AlertTriangle,
+  Filter,
+  ArrowUpDown
 } from 'lucide-react';
+import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 import { toast } from 'sonner';
 import type { Customer } from '@/types';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
@@ -47,18 +51,78 @@ type PaymentApiResponse = {
   };
 };
 
+const calculateOverdueCycles = (paymentCycle?: string, nextPaymentDate?: string | null): number => {
+  if (!nextPaymentDate || !paymentCycle) return 1;
+  const nextDate = new Date(nextPaymentDate);
+  const now = new Date();
+  if (nextDate >= now) return 1;
+
+  const diffTime = now.getTime() - nextDate.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  let cycleDays = 1;
+  if (paymentCycle === 'weekly') cycleDays = 7;
+  else if (paymentCycle === 'bi_weekly') cycleDays = 14;
+
+  return Math.max(1, Math.floor(diffDays / cycleDays) + 1);
+};
+
 export default function RetailerPage() {
   const [query, setQuery] = useState('');
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [selected, setSelected] = useState<Customer | null>(null);
+  const [sortBy, setSortBy] = useState<'name' | 'balance_desc' | 'balance_asc'>('name');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'overdue' | 'completed' | 'current'>('all');
+  type MappedCustomer = Customer & {
+    device_model?: string;
+    os_platform?: string;
+    payment_status?: any; // or import PaymentStatus if needed
+    payment_cycle_amount?: number;
+    remaining_balance: number;
+    total_owed: number;
+    overdue_cycles?: number;
+  };
+
+  const [customers, setCustomers] = useState<MappedCustomer[]>([]);
+  const [selected, setSelected] = useState<MappedCustomer | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [successTx, setSuccessTx] = useState<{ amount: number; wasCleared: boolean } | null>(null);
 
   useEffect(() => {
     const fetchCustomers = async () => {
       const supabase = createBrowserSupabaseClient();
-      const { data } = await supabase.from('customers').select('*');
-      if (data) setCustomers(data);
+      const { data } = await supabase.from('customers').select(`
+        *,
+        devices (
+          device_model,
+          os_platform,
+          payment_status,
+          next_payment_date,
+          remaining_balance,
+          total_owed,
+          payment_cycle_amount
+        )
+      `);
+      
+      if (data) {
+        // Map the primary device's properties onto the customer for the UI
+        const mappedCustomers = data.map((c: any) => {
+          const device = c.devices?.[0] || {};
+          return {
+            ...c,
+            device_model: device.device_model,
+            os_platform: device.os_platform,
+            payment_status: getCalculatedPaymentStatus(
+              device.payment_status, 
+              device.remaining_balance || 0, 
+              device.next_payment_date
+            ),
+            payment_cycle_amount: device.payment_cycle_amount || 0,
+            remaining_balance: device.remaining_balance || 0,
+            total_owed: device.total_owed || 0,
+            overdue_cycles: calculateOverdueCycles(c.payment_cycle, device.next_payment_date),
+          };
+        });
+        setCustomers(mappedCustomers);
+      }
     };
     fetchCustomers();
   }, []);
@@ -71,18 +135,26 @@ export default function RetailerPage() {
     formState: { errors },
   } = useForm<PaymentForm>({ resolver: zodResolver(paymentSchema) });
 
-  const results = query.trim().length >= 2
-    ? customers.filter((c) => {
-        const q = query.toLowerCase();
-        return (
-          c.full_name.toLowerCase().includes(q) ||
-          c.phone_number.includes(q) ||
-          c.device_model.toLowerCase().includes(q)
-        );
-      })
-    : [];
+  const filteredAndSortedCustomers = customers
+    .filter((c) => {
+      const q = query.toLowerCase();
+      const matchesSearch = !q || (
+        c.full_name?.toLowerCase().includes(q) ||
+        c.phone_number?.includes(q) ||
+        c.device_model?.toLowerCase().includes(q)
+      );
+      const matchesFilter = filterStatus === 'all' || 
+        (filterStatus === 'current' ? !['overdue', 'completed'].includes(c.payment_status) : c.payment_status === filterStatus);
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'name') return (a.full_name || '').localeCompare(b.full_name || '');
+      if (sortBy === 'balance_desc') return b.remaining_balance - a.remaining_balance;
+      if (sortBy === 'balance_asc') return a.remaining_balance - b.remaining_balance;
+      return 0;
+    });
 
-  const handleSelectCustomer = (c: Customer) => {
+  const handleSelectCustomer = (c: MappedCustomer) => {
     setSelected(c);
     setQuery('');
     setSuccessTx(null);
@@ -109,8 +181,8 @@ export default function RetailerPage() {
 
         const { customer: updatedCustomer, payment, unlock } = result.data;
 
-        setCustomers((prev) => prev.map((c) => (c.id === selected.id ? updatedCustomer : c)));
-        setSelected(updatedCustomer);
+        setCustomers((prev) => prev.map((c) => (c.id === selected.id ? { ...c, ...updatedCustomer } : c)));
+        setSelected({ ...selected, ...updatedCustomer });
         setSuccessTx({ amount: payment.amount, wasCleared: payment.wasCleared });
         reset();
 
@@ -149,70 +221,105 @@ export default function RetailerPage() {
         <p className="text-sm text-slate-500 mt-1">Search for a customer and log a cash collection.</p>
       </motion.div>
 
-      {/* Search */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-        className="relative"
-      >
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-        <input
-          id="retailer-search"
-          type="search"
-          placeholder="Search by name, phone number, or device…"
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setSuccessTx(null); }}
-          className="w-full pl-11 pr-4 py-4 rounded-2xl bg-[#111827] border border-white/8 text-white placeholder:text-slate-600 text-base focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
-          autoComplete="off"
-        />
+      {/* Search and Filters */}
+      {!selected && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="flex flex-col gap-3"
+        >
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+            <input
+              id="retailer-search"
+              type="search"
+              placeholder="Search by name, phone, or device…"
+              value={query}
+              onChange={(e) => { setQuery(e.target.value); setSuccessTx(null); }}
+              className="w-full pl-11 pr-4 py-4 rounded-2xl bg-[#111827] border border-white/8 text-white placeholder:text-slate-600 text-base focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
+              autoComplete="off"
+            />
+          </div>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value as any)}
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-[#111827] border border-white/8 text-slate-300 text-sm focus:outline-none focus:border-blue-500 appearance-none"
+              >
+                <option value="all">All Statuses</option>
+                <option value="current">Current</option>
+                <option value="overdue">Overdue</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+            <div className="relative flex-1">
+              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-[#111827] border border-white/8 text-slate-300 text-sm focus:outline-none focus:border-blue-500 appearance-none"
+              >
+                <option value="name">Sort by Name</option>
+                <option value="balance_desc">Highest Balance</option>
+                <option value="balance_asc">Lowest Balance</option>
+              </select>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
-        {/* Dropdown results */}
-        <AnimatePresence>
-          {results.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              className="absolute top-full left-0 right-0 mt-2 bg-[#1E293B] border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden max-h-[280px] overflow-y-auto"
-            >
-              {results.map((c) => (
-                <button
-                  key={c.id}
-                  id={`result-${c.id}`}
-                  onClick={() => handleSelectCustomer(c)}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-white/5 transition-colors text-left border-b border-white/5 last:border-0"
-                >
-                  <div className="w-10 h-10 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-sm font-bold text-blue-400 shrink-0">
-                    <User size={16} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{c.full_name}</p>
-                    <p className="text-xs text-slate-500 mt-0.5 truncate">{c.phone_number} · {c.device_model}</p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className={`text-sm font-bold ${c.payment_status === 'overdue' ? 'text-red-400' : 'text-emerald-400'}`}>
-                      {c.payment_status === 'overdue' ? '⚠ Overdue' : '✓ Current'}
-                    </p>
-                    <p className="text-xs text-slate-600">GH₵{c.remaining_balance.toLocaleString()} left</p>
-                  </div>
-                </button>
-              ))}
-            </motion.div>
+      {/* Customer List */}
+      {!selected && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="bg-[#1E293B] border border-white/10 rounded-2xl overflow-hidden max-h-[500px] overflow-y-auto"
+        >
+          {filteredAndSortedCustomers.length > 0 ? (
+            filteredAndSortedCustomers.map((c) => (
+              <button
+                key={c.id}
+                id={`result-${c.id}`}
+                onClick={() => handleSelectCustomer(c)}
+                className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-white/5 transition-colors text-left border-b border-white/5 last:border-0"
+              >
+                <div className="w-10 h-10 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-sm font-bold text-blue-400 shrink-0">
+                  <User size={16} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{c.full_name}</p>
+                  <p className="text-xs text-slate-500 mt-0.5 truncate">{c.phone_number} · {getHumanReadableDeviceName(c.device_model) || c.device_model}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className={`text-sm font-bold ${
+                    c.payment_status === 'overdue' 
+                      ? 'text-red-400' 
+                      : c.payment_status === 'completed'
+                        ? 'text-amber-400'
+                        : 'text-emerald-400'
+                  }`}>
+                    {c.payment_status === 'overdue' 
+                      ? '⚠ Overdue' 
+                      : c.payment_status === 'completed'
+                        ? '★ Completed'
+                        : '✓ Current'
+                    }
+                  </p>
+                  <p className="text-xs text-slate-600">GH₵{(c.remaining_balance || 0).toLocaleString()} left</p>
+                </div>
+              </button>
+            ))
+          ) : (
+            <div className="p-8 text-center">
+              <Search size={32} className="mx-auto text-slate-600 mb-2 opacity-50" />
+              <p className="text-sm text-slate-500">No customers found.</p>
+            </div>
           )}
-          {query.trim().length >= 2 && results.length === 0 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute top-full left-0 right-0 mt-2 bg-[#1E293B] border border-white/10 rounded-2xl p-6 text-center z-50"
-            >
-              <Search size={24} className="mx-auto text-slate-600 mb-2" />
-              <p className="text-sm text-slate-500">No customers found for &quot;{query}&quot;</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
+        </motion.div>
+      )}
 
       {/* Selected customer card */}
       <AnimatePresence mode="wait">
@@ -241,18 +348,22 @@ export default function RetailerPage() {
                     <Phone size={12} className="text-slate-500" />
                     <span className="text-xs text-slate-500">{selected.phone_number}</span>
                   </div>
-                  <p className="text-xs text-slate-600 mt-0.5">{selected.device_model} · {selected.os_platform}</p>
+                  <p className="text-xs text-slate-600 mt-0.5">{getHumanReadableDeviceName(selected.device_model) || selected.device_model} · {selected.os_platform}</p>
                 </div>
                 <div>
                   <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold
                     ${selected.payment_status === 'overdue'
                       ? 'bg-red-500/15 text-red-400 border border-red-500/20'
-                      : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                      : selected.payment_status === 'completed'
+                        ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+                        : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
                     }
                   `}>
                     {selected.payment_status === 'overdue'
                       ? <><AlertTriangle size={10} /> Overdue</>
-                      : <><CheckCircle2 size={10} /> Current</>
+                      : selected.payment_status === 'completed'
+                        ? <><CheckCircle2 size={10} /> Completed</>
+                        : <><CheckCircle2 size={10} /> Current</>
                     }
                   </span>
                 </div>
@@ -264,12 +375,12 @@ export default function RetailerPage() {
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <p className="text-xs text-slate-500">Outstanding Balance</p>
-                  <p className="text-3xl font-bold text-white tabular-nums mt-0.5">
-                    GH₵{selected.remaining_balance.toLocaleString()}
+                  <p className="text-2xl sm:text-3xl font-bold text-white tabular-nums mt-0.5 truncate" title={`GH₵${(selected.remaining_balance || 0).toLocaleString()}`}>
+                    GH₵{(selected.remaining_balance || 0).toLocaleString()}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-slate-500">of GH₵{selected.total_owed.toLocaleString()} total</p>
+                  <p className="text-xs text-slate-500">of GH₵{(selected.total_owed || 0).toLocaleString()} total</p>
                   <p className="text-sm font-semibold text-emerald-400 mt-0.5">
                     {progressPct.toFixed(0)}% paid
                   </p>
@@ -328,11 +439,11 @@ export default function RetailerPage() {
                       <input
                         id="payment-amount"
                         type="number"
-                        min="1"
-                        step="1"
-                        placeholder="0"
+                        min="0.01"
+                        step="any"
+                        placeholder="0.00"
                         {...register('amount')}
-                        className="w-full pl-8 pr-4 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-slate-600 text-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all tabular-nums"
+                        className="w-full pl-14 pr-4 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-slate-600 text-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all tabular-nums"
                       />
                     </div>
                     {errors.amount && (
@@ -355,22 +466,29 @@ export default function RetailerPage() {
 
                 {/* Quick amount chips */}
                 <div className="flex gap-2 mt-3 flex-wrap">
-                  {[5000, 10000, 20000, 50000].map((amt) => (
-                    <button
-                      key={amt}
-                      type="button"
-                      onClick={() => setValue('amount', String(Math.min(amt, selected.remaining_balance)), { shouldValidate: true })}
-                      className="px-3 py-1.5 rounded-xl bg-white/5 text-slate-400 hover:bg-white/8 hover:text-white text-xs font-medium transition-all border border-white/5"
-                    >
-                      GH₵{(amt / 1000).toFixed(0)}k
-                    </button>
-                  ))}
+                  {(selected.payment_cycle_amount && selected.payment_cycle_amount > 0 && selected.payment_cycle_amount < selected.remaining_balance) ? (
+                    (() => {
+                      const calculatedAmount = Math.min(
+                        selected.payment_cycle_amount! * (selected.overdue_cycles || 1),
+                        selected.remaining_balance
+                      );
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => setValue('amount', String(calculatedAmount), { shouldValidate: true })}
+                          className="px-3 py-1.5 rounded-xl bg-white/5 text-slate-400 hover:bg-white/8 hover:text-white text-xs font-medium transition-all border border-white/5"
+                        >
+                          Installment (GH₵{Number(calculatedAmount).toLocaleString()})
+                        </button>
+                      );
+                    })()
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => setValue('amount', String(selected.remaining_balance), { shouldValidate: true })}
                     className="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15 text-xs font-semibold transition-all border border-emerald-500/20"
                   >
-                    Full (GH₵{selected.remaining_balance.toLocaleString()})
+                    Full (GH₵{(selected.remaining_balance || 0).toLocaleString()})
                   </button>
                 </div>
 
@@ -399,17 +517,7 @@ export default function RetailerPage() {
         )}
       </AnimatePresence>
 
-      {/* Empty state when no selection */}
-      {!selected && query.trim().length < 2 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center py-12 text-slate-600"
-        >
-          <Search size={40} className="mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Type at least 2 characters to search for a customer.</p>
-        </motion.div>
-      )}
+
     </div>
   );
 }

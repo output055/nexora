@@ -53,7 +53,7 @@ export function StatsCard({
         {icon}
       </div>
       <div>
-        <p className="text-2xl font-bold text-white tabular-nums">{displayValue}</p>
+        <p className="text-xl sm:text-2xl font-bold text-white tabular-nums truncate" title={displayValue}>{displayValue}</p>
         <p className="text-xs text-slate-500 font-medium mt-1">{label}</p>
         {trend && trendLabel && (
           <div className={cn('flex items-center gap-1 mt-2 text-xs font-semibold', trendColors[trend])}>

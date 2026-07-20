@@ -1,6 +1,6 @@
 // ─── Domain Enums ──────────────────────────────────────────────────────────────
 export type OsPlatform = 'iOS' | 'Android';
-export type PaymentStatus = 'current' | 'overdue';
+export type PaymentStatus = 'current' | 'overdue' | 'completed';
 export type ResidentialStatus = 'owner' | 'renting' | 'family_house' | 'other';
 export type PaymentCycle = 'daily' | 'weekly' | 'bi_weekly';
 
@@ -41,6 +41,8 @@ export interface UserProfile {
 // ─── Core Domain ──────────────────────────────────────────────────────────────
 export interface Customer {
   id: string;
+  user_id?: string;
+  email?: string;
   full_name: string;
   phone_number: string;
   ghana_card_id?: string;
@@ -54,9 +56,24 @@ export interface Customer {
   occupation?: string;
   place_of_work?: string;
   payment_cycle?: PaymentCycle;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Device {
+  id: string;
+  customer_id: string;
   os_platform: OsPlatform;
   device_model: string;
-  miradore_device_id: string;
+  mdm_device_id: string;
+  imei?: string;
+  serial_number?: string;
+  os_version?: string;
+  base_price?: number;
+  contract_duration_months?: number;
+  down_payment?: number;
+  payment_cycle_amount?: number;
+  next_payment_date?: string;
   total_owed: number;
   remaining_balance: number;
   payment_status: PaymentStatus;
@@ -83,13 +100,13 @@ export interface AuditLog {
 }
 
 // ─── API Models ───────────────────────────────────────────────────────────────
-export interface MiradoreDeviceLockPayload {
+export interface MdmDeviceLockPayload {
   NotificationText: string;
   PhoneNumber: string;
   FootnoteText: string;
 }
 
-export interface MiradoreResponse {
+export interface MdmResponse {
   success: boolean;
   statusCode: number;
   message?: string;

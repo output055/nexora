@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UserPlus, Shield, Trash2, Edit2, X, AlertCircle, RefreshCw } from 'lucide-react';
+import { UserPlus, Shield, Trash2, Edit2, X, AlertCircle, RefreshCw, Search } from 'lucide-react';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 import { fetchUsers, createUser, updateUserRole, deleteUser, updateUser } from '@/app/actions/users';
+import { usePagination } from '@/lib/hooks/usePagination';
+import { PaginationBar } from './PaginationBar';
 
 type Role = { id: string; name: string };
 type UserWithRole = { id: string; email: string; created_at: string; role: Role | null };
@@ -18,6 +20,10 @@ export function UserManagement() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Filters
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string>('all'); // 'all' or role id
 
   // Form State
   const [email, setEmail] = useState('');
@@ -39,28 +45,40 @@ export function UserManagement() {
       } else {
         setError(res.error || 'Failed to fetch users');
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
+
+  const filtered = useMemo(() =>
+    users.filter((u) => {
+      const q = search.toLowerCase();
+      const matchSearch = !q || u.email.toLowerCase().includes(q);
+      const matchRole =
+        roleFilter === 'all' ||
+        (roleFilter === '__no_role__' && !u.role) ||
+        u.role?.id === roleFilter;
+      return matchSearch && matchRole;
+    }),
+    [users, search, roleFilter]
+  );
+
+  const pagination = usePagination(filtered, 10);
+  const hasActiveFilters = search || roleFilter !== 'all';
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setError('');
-    
     if (!roleId && roles.length > 0) {
       setError('Please select a role');
       setSubmitting(false);
       return;
     }
-
     const res = await createUser(email, password, roleId);
     if (res.success) {
       setIsModalOpen(false);
@@ -77,16 +95,13 @@ export function UserManagement() {
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser || !editPassword) return;
-
     setSubmitting(true);
     setError('');
-
     const res = await updateUser(editingUser.id, { password: editPassword });
     if (res.success) {
       setIsEditModalOpen(false);
       setEditingUser(null);
       setEditPassword('');
-      // No need to reload data since password isn't displayed, but we can if we want
     } else {
       setError(res.error || 'Failed to update user');
     }
@@ -95,25 +110,23 @@ export function UserManagement() {
 
   const handleRoleChange = async (userId: string, newRoleId: string) => {
     const res = await updateUserRole(userId, newRoleId);
-    if (res.success) {
-      loadData();
-    } else {
-      alert(res.error || 'Failed to update role');
-    }
+    if (res.success) loadData();
+    else alert(res.error || 'Failed to update role');
   };
 
   const handleDelete = async (userId: string) => {
     if (!confirm('Are you sure you want to delete this user completely?')) return;
     const res = await deleteUser(userId);
-    if (res.success) {
-      loadData();
-    } else {
-      alert(res.error || 'Failed to delete user');
-    }
+    if (res.success) loadData();
+    else alert(res.error || 'Failed to delete user');
   };
+
+  const formatRoleName = (name: string) =>
+    name.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold text-white">System Users</h2>
@@ -136,6 +149,69 @@ export function UserManagement() {
       )}
 
       <div className="bg-[#111827] border border-white/5 rounded-2xl overflow-hidden">
+        {/* Filter toolbar */}
+        <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-white/5">
+          {/* Email search */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+            <input
+              id="user-search"
+              type="text"
+              placeholder="Search by email…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/8 text-white placeholder:text-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
+            />
+          </div>
+
+          {/* Role filter */}
+          <div className="flex gap-2 flex-wrap items-center">
+            <span className="text-xs text-slate-600 font-medium">Role:</span>
+            <button
+              onClick={() => setRoleFilter('all')}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                roleFilter === 'all'
+                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                  : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/8 hover:text-slate-300'
+              }`}
+            >
+              All
+            </button>
+            {roles.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => setRoleFilter(r.id)}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  roleFilter === r.id
+                    ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30'
+                    : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/8 hover:text-slate-300'
+                }`}
+              >
+                {formatRoleName(r.name)}
+              </button>
+            ))}
+            <button
+              onClick={() => setRoleFilter('__no_role__')}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                roleFilter === '__no_role__'
+                  ? 'bg-slate-500/20 text-slate-300 border border-slate-500/30'
+                  : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/8 hover:text-slate-300'
+              }`}
+            >
+              No Role
+            </button>
+            {hasActiveFilters && (
+              <button
+                onClick={() => { setSearch(''); setRoleFilter('all'); }}
+                className="flex items-center gap-1 px-2 py-2 rounded-xl text-xs text-slate-500 hover:text-white bg-white/5 border border-white/5 transition-all"
+              >
+                <X size={12} /> Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-400">
             <thead className="bg-white/5 text-slate-300 font-semibold border-b border-white/5">
@@ -154,14 +230,22 @@ export function UserManagement() {
                     <span className="text-slate-500">Loading users...</span>
                   </td>
                 </tr>
-              ) : users.length === 0 ? (
+              ) : pagination.paginated.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
-                    No users found.
+                    {users.length === 0 ? 'No users found.' : 'No users match your filters.'}
+                    {hasActiveFilters && (
+                      <button
+                        onClick={() => { setSearch(''); setRoleFilter('all'); }}
+                        className="block mx-auto mt-1 text-xs text-blue-400 hover:underline"
+                      >
+                        Clear filters
+                      </button>
+                    )}
                   </td>
                 </tr>
               ) : (
-                users.map((user) => (
+                pagination.paginated.map((user) => (
                   <tr key={user.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="px-6 py-4 text-white font-medium">{user.email}</td>
                     <td className="px-6 py-4">
@@ -172,14 +256,14 @@ export function UserManagement() {
                       >
                         <option value="">-- No Role --</option>
                         {roles.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                          </option>
+                          <option key={r.id} value={r.id}>{formatRoleName(r.name)}</option>
                         ))}
                       </select>
                     </td>
                     <td className="px-6 py-4">
-                      {new Date(user.created_at).toLocaleDateString()}
+                      {new Date(user.created_at).toLocaleDateString('en-GB', {
+                        day: '2-digit', month: 'short', year: 'numeric'
+                      })}
                     </td>
                     <td className="px-6 py-4 text-right space-x-2">
                       <button
@@ -207,6 +291,21 @@ export function UserManagement() {
             </tbody>
           </table>
         </div>
+
+        {!loading && (
+          <PaginationBar
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            totalItems={pagination.totalItems}
+            startIndex={pagination.startIndex}
+            endIndex={pagination.endIndex}
+            pageSize={pagination.pageSize}
+            pageSizeOptions={[10, 25]}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="users"
+          />
+        )}
       </div>
 
       {/* Create User Modal */}
@@ -249,7 +348,7 @@ export function UserManagement() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full bg-[#0A0F1E] border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
-                    placeholder="agent@nexora.com"
+                    placeholder="agent@credifon.com"
                   />
                 </div>
                 <div>
@@ -274,9 +373,7 @@ export function UserManagement() {
                   >
                     <option value="" disabled>Select a role...</option>
                     {roles.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </option>
+                      <option key={r.id} value={r.id}>{formatRoleName(r.name)}</option>
                     ))}
                   </select>
                 </div>
