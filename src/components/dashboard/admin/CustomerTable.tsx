@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Apple, Smartphone, ChevronUp, ChevronDown, X, MoreVertical, Edit2, Trash2, Eye, CreditCard } from 'lucide-react';
+import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 import type { Customer } from '@/types';
 import type { CustomerWithDevices } from '@/app/dashboard/admin/customers/page';
 import Link from 'next/link';
@@ -286,7 +287,7 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                     </div>
                   </td>
                   <td className="px-4 py-3.5">
-                    <p className="text-sm text-slate-300">{primaryDevice?.device_model || 'No device'}</p>
+                    <p className="text-sm text-slate-300">{primaryDevice ? (getHumanReadableDeviceName(primaryDevice.device_model) || primaryDevice.device_model) : 'No device'}</p>
                     {primaryDevice?.mdm_device_id && (
                       <p className="text-xs text-slate-600 mt-0.5">ID: {primaryDevice.mdm_device_id}</p>
                     )}

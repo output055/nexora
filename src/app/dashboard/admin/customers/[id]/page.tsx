@@ -1,4 +1,5 @@
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/lib/supabase';
+import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, User, Smartphone, CreditCard, Calendar, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -102,7 +103,7 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-slate-500 font-medium">Model</p>
-                  <p className="text-slate-200 text-sm font-semibold">{primaryDevice.device_model}</p>
+                  <p className="text-slate-200 text-sm font-semibold">{getHumanReadableDeviceName(primaryDevice.device_model) || primaryDevice.device_model}</p>
                 </div>
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-slate-500 font-medium">Status</p>

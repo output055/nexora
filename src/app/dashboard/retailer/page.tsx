@@ -21,6 +21,7 @@ import {
   Filter,
   ArrowUpDown
 } from 'lucide-react';
+import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 import { toast } from 'sonner';
 import type { Customer } from '@/types';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
@@ -290,7 +291,7 @@ export default function RetailerPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate">{c.full_name}</p>
-                  <p className="text-xs text-slate-500 mt-0.5 truncate">{c.phone_number} · {c.device_model}</p>
+                  <p className="text-xs text-slate-500 mt-0.5 truncate">{c.phone_number} · {getHumanReadableDeviceName(c.device_model) || c.device_model}</p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className={`text-sm font-bold ${
@@ -347,7 +348,7 @@ export default function RetailerPage() {
                     <Phone size={12} className="text-slate-500" />
                     <span className="text-xs text-slate-500">{selected.phone_number}</span>
                   </div>
-                  <p className="text-xs text-slate-600 mt-0.5">{selected.device_model} · {selected.os_platform}</p>
+                  <p className="text-xs text-slate-600 mt-0.5">{getHumanReadableDeviceName(selected.device_model) || selected.device_model} · {selected.os_platform}</p>
                 </div>
                 <div>
                   <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold

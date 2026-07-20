@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createServiceRoleSupabaseClient } from '@/lib/supabase';
-import { sendSMS } from '@/lib/sms';
+import { sendSMS, sendTriggerSMS } from '@/lib/sms';
 
 export async function GET(request: Request) {
-  // Simple auth check to ensure only authorized callers (like Vercel Cron) can hit this
+  // Simple auth check to ensure only authorized callers (like Vercel Cron) can hit this (skip in local development)
   const authHeader = request.headers.get('authorization');
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (process.env.NODE_ENV !== 'development' && process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
@@ -57,22 +57,37 @@ export async function GET(request: Request) {
       let shouldWarn = false;
 
       // Smart Cycle-based Warning Thresholds
-      if (cycle === 'daily' && daysUntilDue === 0) {
-        shouldWarn = true; // Warn on the day it's due
+      if (daysUntilDue === 0) {
+        // Everyone gets a lock warning on the day it's due
+        shouldWarn = true;
       } else if (cycle === 'weekly' && daysUntilDue === 1) {
-        shouldWarn = true; // Warn 1 day before
+        shouldWarn = true; // Reminder 1 day before
       } else if (cycle === 'bi_weekly' && daysUntilDue === 2) {
-        shouldWarn = true; // Warn 2 days before
+        shouldWarn = true; // Reminder 2 days before
       } else if (cycle === 'monthly' && daysUntilDue === 3) {
-        shouldWarn = true; // Warn 3 days before
+        shouldWarn = true; // Reminder 3 days before
       }
 
       if (shouldWarn) {
         const whenDue = daysUntilDue === 0 ? 'TODAY' : `in ${daysUntilDue} day${daysUntilDue > 1 ? 's' : ''}`;
-        const msg = `Hi ${cust.full_name}, your Credifon device payment of GHS ${Number(device.payment_cycle_amount).toFixed(2)} is due ${whenDue} (${nextDate.toLocaleDateString()}). Please pay to avoid service interruption.`;
         
-        await sendSMS(cust.phone_number, msg);
-        messagesSent++;
+        // Use automated trigger based on urgency
+        const triggerKey = daysUntilDue === 0 ? 'lock_warning' : 'payment_reminder';
+        
+        const sent = await sendTriggerSMS(
+          triggerKey,
+          cust.phone_number,
+          {
+            customer_name: cust.full_name,
+            amount_due: Number(device.payment_cycle_amount).toFixed(2),
+            due_date: whenDue === 'TODAY' ? 'TODAY' : nextDate.toLocaleDateString()
+          },
+          cust.id
+        );
+        
+        if (sent) {
+          messagesSent++;
+        }
       }
     }
 

@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { notFound } from 'next/navigation';
+import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 import { PrintAgreementControls } from '@/components/dashboard/admin/PrintAgreementControls';
 import { Shield } from 'lucide-react';
 
@@ -64,7 +65,7 @@ export default async function PrintableAgreementPage({ params }: { params: Promi
             </div>
             <div>
               <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider mb-3">Device Details</h3>
-              <p><strong>Make / Model:</strong> {primaryDevice.device_model}</p>
+              <p><strong>Make / Model:</strong> {getHumanReadableDeviceName(primaryDevice.device_model) || primaryDevice.device_model}</p>
               <p><strong>Platform:</strong> {primaryDevice.os_platform}</p>
               <p><strong>IMEI:</strong> {primaryDevice.imei || 'N/A'}</p>
               <p><strong>Serial Number:</strong> {primaryDevice.serial_number || 'N/A'}</p>

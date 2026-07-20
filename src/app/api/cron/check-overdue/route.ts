@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import { createServiceRoleSupabaseClient } from '@/lib/supabase';
 import { sendDeviceCommand } from '@/lib/manageengine';
 import { getAllSystemSettings } from '@/app/actions/settings';
+import { sendTriggerSMS } from '@/lib/sms';
 
 export async function GET(request: Request) {
-  // 1. Verify cron secret to prevent unauthorized access
+  // 1. Verify cron secret to prevent unauthorized access (skip in local development)
   const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (process.env.NODE_ENV !== 'development' && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -17,8 +18,18 @@ export async function GET(request: Request) {
     // and they still have a remaining balance > 0.
     const { data: overdueDevices, error } = await supabase
       .from('devices')
-      .select('id, mdm_device_id, customer_id')
-      .eq('payment_status', 'current')
+      .select(`
+        id, 
+        mdm_device_id, 
+        customer_id, 
+        payment_cycle_amount,
+        customers (
+          id,
+          phone_number,
+          full_name
+        )
+      `)
+      .in('payment_status', ['current', 'overdue'])
       .gt('remaining_balance', 0)
       .lt('next_payment_date', new Date().toISOString());
 
@@ -34,36 +45,60 @@ export async function GET(request: Request) {
     
     const results = [];
     
-    // For each overdue device, set status to overdue and lock it
+    // For each overdue device, ensure it is set to overdue and locked
     for (const device of overdueDevices || []) {
-      const { error: updateError } = await supabase
-        .from('devices')
-        .update({ payment_status: 'overdue' })
-        .eq('id', device.id);
+      const isNewlyOverdue = device.payment_status === 'current';
 
-      if (!updateError) {
-        try {
-          // Map UI setting values to actual ManageEngine API command names
-          let apiCommandName = lockCommand;
-          if (lockCommand === 'LostMode') apiCommandName = 'enable_lost_mode';
-          if (lockCommand === 'DeviceLock') apiCommandName = 'lock';
+      if (isNewlyOverdue) {
+        const { error: updateError } = await supabase
+          .from('devices')
+          .update({ payment_status: 'overdue' })
+          .eq('id', device.id);
           
-          await sendDeviceCommand(device.mdm_device_id, apiCommandName, {
-            lock_message: lostModeMessage,
-            phone_number: lostModePhone,
-            passcode: kioskPin // Assuming 'passcode' or 'pin' is the key for Kiosk mode in ME
-          });
-          
+        if (updateError) {
+          console.error(`Failed to update status for ${device.id}`, updateError);
+          continue; // Skip this device if we can't update its status
+        }
+      }
+
+      try {
+        // Map UI setting values to actual ManageEngine API command names
+        let apiCommandName = lockCommand;
+        if (lockCommand === 'LostMode') apiCommandName = 'enable_lost_mode';
+        if (lockCommand === 'DeviceLock') apiCommandName = 'lock';
+        
+        await sendDeviceCommand(device.mdm_device_id, apiCommandName, {
+          lock_message: lostModeMessage,
+          phone_number: lostModePhone,
+          passcode: kioskPin 
+        });
+        
+        // ONLY log and send SMS if this is the FIRST time it's being locked, 
+        // to prevent spamming the user and using up SMS credits on retries
+        if (isNewlyOverdue) {
           await supabase.from('audit_logs').insert({
             actor_name: 'System Cron',
             action_description: `Automatically locked device ${device.mdm_device_id} (${lockCommand}) due to missed payment.`
           });
           
-          results.push({ id: device.id, status: 'locked' });
-        } catch (mdmError: any) {
-          console.error(`Failed to lock device ${device.mdm_device_id}:`, mdmError);
-          results.push({ id: device.id, status: 'failed_lock', error: mdmError.message });
+          const cust: any = device.customers;
+          if (cust && cust.phone_number) {
+            await sendTriggerSMS(
+              'device_locked',
+              cust.phone_number,
+              {
+                customer_name: cust.full_name,
+                amount_due: Number(device.payment_cycle_amount || 0).toFixed(2),
+              },
+              cust.id
+            );
+          }
         }
+        
+        results.push({ id: device.id, status: isNewlyOverdue ? 'locked' : 'retried_lock' });
+      } catch (mdmError: any) {
+        console.error(`Failed to lock device ${device.mdm_device_id}:`, mdmError);
+        results.push({ id: device.id, status: 'failed_lock', error: mdmError.message });
       }
     }
 

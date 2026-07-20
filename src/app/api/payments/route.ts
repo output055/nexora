@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
 import { unlockDevice } from '@/lib/scalefusion';
+import { sendTriggerSMS } from '@/lib/sms';
 import type { Customer, PaymentStatus } from '@/types';
 
 type PaymentRequestBody = {
@@ -172,6 +173,19 @@ export async function POST(request: NextRequest) {
           ? `AUTO UNLOCK triggered for device ${currentDevice.mdm_device_id} (${customer.full_name}) - payment processed`
           : `AUTO UNLOCK FAILED for ${customer.full_name} (${currentDevice.os_platform}) - ${mirResult.message ?? 'MDM unlock command failed'}`,
       });
+    }
+
+    if (customer.phone_number) {
+      await sendTriggerSMS(
+        'payment_receipt',
+        customer.phone_number,
+        {
+          amount_paid: Number(parsed.amount).toFixed(2),
+          balance: Number(newBalance).toFixed(2),
+          customer_name: customer.full_name
+        },
+        customer.id
+      );
     }
 
     // Map device properties onto customer to match RetailerPage expectations

@@ -4,7 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { sendDeviceCommand } from '@/lib/manageengine';
 import { getSystemSetting } from './settings';
-import { sendSMS } from '@/lib/sms';
+import { sendSMS, sendTriggerSMS } from '@/lib/sms';
 
 export interface LogPaymentInput {
   customerId: string;
@@ -144,16 +144,19 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
         }
       }
 
-      // Send SMS Receipt
+      // Send SMS Receipt via automated trigger
       const cust: any = deviceBeforePayment?.customers;
       if (cust && cust.phone_number) {
-        let msg = `Payment of GHS ${Number(input.amount).toFixed(2)} received. `;
-        if (newBalance <= 0) {
-          msg += `Device fully paid off! Congrats.`;
-        } else {
-          msg += `Bal: GHS ${Number(newBalance).toFixed(2)}. Next due: ${nextDate.toLocaleDateString()}`;
-        }
-        await sendSMS(cust.phone_number, msg);
+        await sendTriggerSMS(
+          'payment_receipt',
+          cust.phone_number,
+          {
+            amount_paid: Number(input.amount).toFixed(2),
+            balance: Number(newBalance).toFixed(2),
+            customer_name: cust.full_name
+          },
+          cust.id
+        );
       }
 
     revalidatePath('/dashboard/admin/customers');

@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/auth-context';
 import { getDevicesAction } from '@/app/actions/devices';
 import { updateSystemSetting } from '@/app/actions/settings';
+import { addExpense } from '@/app/actions/expenses';
 
 const UNIT_PRICE_USD = 4.5; // $4.5 per device
 const MIN_DEVICES = 15;
@@ -75,6 +76,14 @@ export default function AdminBillingPage() {
       const res = await updateSystemSetting('last_paid_month', currentMonthStr);
       
       if (res.success) {
+        // Automatically log this as an expense
+        await addExpense({
+          amount: totalCostGHS,
+          category: 'Software & Subscriptions',
+          description: `Credifon Platform Subscription for ${currentMonthStr} (Ref: ${reference.reference})`,
+          expense_date: today.toISOString().split('T')[0]
+        });
+
         toast.success("System unlocked successfully. Thank you for your payment.");
         // We reload the window so the SubscriptionGuard re-evaluates
         window.location.href = '/dashboard/admin';

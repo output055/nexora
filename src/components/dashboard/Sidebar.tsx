@@ -18,6 +18,11 @@ import {
   Smartphone,
   Map,
   X,
+  TrendingUp,
+  Bell,
+  Send,
+  MessageSquare,
+  List,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -43,13 +48,14 @@ const adminNavItems: NavItem[] = [
     icon: <LayoutDashboard size={18} />,
     permission: 'view_analytics',
   },
+
   {
     label: 'Device Management',
     href: '/dashboard/admin/devices',
     icon: <Smartphone size={18} />,
     permission: 'manage_devices',
   },
- 
+
   {
     label: 'Customer Directory',
     href: '/dashboard/admin/customers',
@@ -63,6 +69,36 @@ const adminNavItems: NavItem[] = [
     permission: 'view_audit_logs',
   },
   {
+    label: 'Communications',
+    icon: <Bell size={18} />,
+    subItems:[
+      {
+        label: 'Notifications',
+        href: '/dashboard/admin/notifications',
+        icon: <Bell size={16} />,
+        permission: 'view_notifications' // Optional permission, assume all users can view their own
+      },
+      {
+        label: 'SMS Broadcasts',
+        href: '/dashboard/admin/communications/broadcasts',
+        icon: <Send size={16} />,
+        permission: 'manage_settings' // Reusing a high-level permission for SMS
+      },
+      {
+        label: 'SMS Logs',
+        href: '/dashboard/admin/communications/logs',
+        icon: <List size={16} />,
+        permission: 'view_audit_logs'
+      },
+      {
+        label: 'Automated Triggers',
+        href: '/dashboard/admin/communications/settings',
+        icon: <MessageSquare size={16} />,
+        permission: 'manage_settings'
+      }
+    ]
+  },
+  {
     label: 'Administration',
     icon: <Shield size={18} />,
     subItems: [
@@ -72,12 +108,19 @@ const adminNavItems: NavItem[] = [
         icon: <Map size={18} />,
         permission: 'manage_devices',
       },
+      {
+        label: 'Reports & Analytics',
+        href: '/dashboard/admin/reports',
+        icon: <TrendingUp size={18} />,
+        permission: 'view_analytics',
+      },
       { label: 'System Users', href: '/dashboard/admin/users', icon: <Users size={16} />, permission: 'manage_users' },
       { label: 'Roles & Permissions', href: '/dashboard/admin/settings', icon: <ShieldCheck size={16} />, permission: 'manage_roles' },
       { label: 'System Settings', href: '/dashboard/admin/system-settings', icon: <Settings size={16} />, permission: 'view_settings' },
       { label: 'Billing & Subscription', href: '/dashboard/admin/billing', icon: <CreditCard size={16} />, permission: 'view_settings' },
     ],
   },
+
 ];
 
 const retailerNavItems: NavItem[] = [
@@ -305,7 +348,7 @@ export function DashboardSidebar() {
             </Link>
           );
         })}
-        </nav>
+      </nav>
 
       {/* Bottom settings link */}
       {loading ? (
@@ -371,9 +414,8 @@ export function DashboardSidebar() {
 
       {/* Desktop sidebar */}
       <aside
-        className={`hidden lg:flex flex-col h-screen sticky top-0 border-r border-sidebar-border bg-[#0D1526] transition-all duration-300 shrink-0 ${
-          collapsed ? 'w-[68px]' : 'w-[260px]'
-        }`}
+        className={`hidden lg:flex flex-col h-screen sticky top-0 border-r border-sidebar-border bg-[#0D1526] transition-all duration-300 shrink-0 ${collapsed ? 'w-[68px]' : 'w-[260px]'
+          }`}
       >
         {renderContent()}
       </aside>

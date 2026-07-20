@@ -153,12 +153,12 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-5 pt-5 border-t border-white/5">
+          {/* <div className="mt-5 pt-5 border-t border-white/5">
             <p className="text-xs text-center text-slate-500">
               <span className="font-medium text-blue-400">Demo mode:</span>{' '}
               Any credentials work when Supabase is not configured.
             </p>
-          </div>
+          </div> */}
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-6">
