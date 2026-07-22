@@ -35,7 +35,7 @@ type RegisterDevicePayload = {
 };
 
 const GHANA_CARD_PATTERN = /^GHA-\d{9}-\d$/i;
-const MAX_SCAN_BYTES = 8 * 1024 * 1024;
+const MAX_SCAN_BYTES = 2 * 1024 * 1024;
 const ALLOWED_SCAN_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 
 const cleanString = (formData: FormData, key: string) => {
@@ -83,7 +83,7 @@ function parseRegisterPayload(formData: FormData):
   if (!payload.ghana_card_id) return { error: 'Ghana Card ID is required.' };
   if (!GHANA_CARD_PATTERN.test(payload.ghana_card_id)) return { error: 'Ghana Card ID must match GHA-XXXXXXXXX-X.' };
   if (!payload.ghana_card_scan || !payload.ghana_card_scan.size) return { error: 'Ghana Card scan/photo is required.' };
-  if (payload.ghana_card_scan.size > MAX_SCAN_BYTES) return { error: 'Ghana Card scan must be 8MB or smaller.' };
+  if (payload.ghana_card_scan.size > MAX_SCAN_BYTES) return { error: 'Ghana Card scan must be 2MB or smaller.' };
   if (!ALLOWED_SCAN_TYPES.has(payload.ghana_card_scan.type)) return { error: 'Ghana Card scan must be a JPG, PNG, WebP, or PDF file.' };
   if (!payload.full_name) return { error: 'Full legal name is required.' };
   if (!payload.email) return { error: 'Email address is required.' };
@@ -141,6 +141,11 @@ export async function POST(request: NextRequest) {
 
     const admin = createServiceRoleSupabaseClient();
     const { payload } = parsed;
+
+    // Enforce 2MB file size limit for Ghana Card scan
+    if (payload.ghana_card_scan.size > 2 * 1024 * 1024) {
+      return NextResponse.json({ success: false, error: 'The uploaded image exceeds the 2MB size limit. Please upload a smaller image.' }, { status: 400 });
+    }
 
     const { data: existingDevice } = await admin
       .from('customers')

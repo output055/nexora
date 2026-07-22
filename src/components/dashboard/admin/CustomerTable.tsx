@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { Search, Apple, Smartphone, ChevronUp, ChevronDown, X, MoreVertical, Edit2, Trash2, Eye, CreditCard } from 'lucide-react';
 import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 import type { Customer } from '@/types';
@@ -29,6 +30,7 @@ type PlatformFilter = 'all' | 'iOS' | 'Android';
 type CycleFilter = 'all' | 'daily' | 'weekly' | 'bi_weekly';
 
 export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProps) {
+  const router = useRouter();
   const { hasPermission } = useAuth();
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<StatusFilter>('all');
@@ -274,11 +276,12 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                 return (
                 <motion.tr
                   key={c.id}
+                  onClick={() => router.push(`/dashboard/admin/customers/${c.id}`)}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ delay: i * 0.02 }}
-                  className="border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors"
+                  className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors cursor-pointer group"
                 >
                   <td className="px-4 py-3.5">
                     <div>
@@ -360,7 +363,8 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                     <div className="flex items-center justify-end gap-1">
                       <Link
                         href={`/dashboard/admin/customers/${c.id}`}
-                        className="p-1.5 text-slate-400 hover:text-indigo-400 bg-transparent hover:bg-indigo-500/10 rounded-lg transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-1.5 text-slate-400 hover:text-indigo-400 bg-transparent hover:bg-indigo-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                         title="View Details & History"
                       >
                         <Eye size={16} />
@@ -368,7 +372,8 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                       {primaryDevice?.mdm_device_id && hasPermission('manage_devices') && (
                         <Link
                           href={`/dashboard/admin/mdm?deviceId=${primaryDevice.mdm_device_id}`}
-                          className="p-1.5 text-slate-400 hover:text-sky-400 bg-transparent hover:bg-sky-500/10 rounded-lg transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-1.5 text-slate-400 hover:text-sky-400 bg-transparent hover:bg-sky-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                           title="Manage Device"
                         >
                           <Smartphone size={16} />
@@ -376,9 +381,9 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                       )}
                       {hasPermission('log_payment') && (
                         <button
-                          onClick={() => setPayingCustomer({ customer: c, deviceId: primaryDevice?.id || null })}
+                          onClick={(e) => { e.stopPropagation(); setPayingCustomer({ customer: c, deviceId: primaryDevice?.id || null }); }}
                           disabled={isDeleting === c.id}
-                          className="p-1.5 text-slate-400 hover:text-emerald-400 bg-transparent hover:bg-emerald-500/10 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-emerald-400 bg-transparent hover:bg-emerald-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                           title="Log Payment"
                         >
                           <CreditCard size={16} />
@@ -386,9 +391,9 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                       )}
                       {hasPermission('edit_customer') && (
                         <button
-                          onClick={() => setEditingCustomer(c)}
+                          onClick={(e) => { e.stopPropagation(); setEditingCustomer(c); }}
                           disabled={isDeleting === c.id}
-                          className="p-1.5 text-slate-400 hover:text-blue-400 bg-transparent hover:bg-blue-500/10 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-blue-400 bg-transparent hover:bg-blue-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                           title="Edit Customer"
                         >
                           <Edit2 size={16} />
@@ -396,9 +401,9 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                       )}
                       {hasPermission('delete_customer') && (
                         <button
-                          onClick={() => handleDelete(c.id)}
+                          onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }}
                           disabled={isDeleting === c.id}
-                          className="p-1.5 text-slate-400 hover:text-red-400 bg-transparent hover:bg-red-500/10 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-red-400 bg-transparent hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                           title="Delete Customer"
                         >
                           <Trash2 size={16} />

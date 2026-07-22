@@ -406,7 +406,8 @@ export async function requestDeviceLocationUpdate(deviceId: string): Promise<any
         throw new Error(e.message === 'Unexpected end of JSON input' || e instanceof SyntaxError ? errorText : e.message);
       }
     }
-    return await response.json();
+    const text = await response.text();
+    return text ? JSON.parse(text) : { success: true };
   } catch (error) {
     console.error(`Error requesting location update for device ${deviceId}:`, error);
     throw error;

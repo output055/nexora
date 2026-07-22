@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/auth-context';
 import { getCalculatedPaymentStatus } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import {
@@ -26,6 +28,15 @@ import type { Customer } from '@/types';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 
 export default function AdminDashboard() {
+  const router = useRouter();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user?.roles.some(r => r.name === 'field_agent')) {
+      router.replace('/dashboard/agent');
+    }
+  }, [user, router]);
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [stats, setStats] = useState<any>({
     totalCapitalDeployed: 0,

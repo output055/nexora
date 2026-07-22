@@ -3,6 +3,42 @@
 import { createServiceRoleSupabaseClient } from '@/lib/supabase';
 import type { Customer } from '@/types';
 
+export async function getSignedScanUrl(path: string) {
+  try {
+    const supabase = createServiceRoleSupabaseClient();
+    const { data, error } = await supabase.storage
+      .from('ghana-card-scans')
+      .createSignedUrl(path, 60 * 60); // 1 hour expiry
+      
+    if (error) throw error;
+    return { success: true, url: data.signedUrl };
+  } catch (err: any) {
+    console.error('Failed to get signed URL:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function uploadScan(fileName: string, formData: FormData) {
+  try {
+    const file = formData.get('file') as File;
+    if (!file) throw new Error('No file provided');
+
+    const supabase = createServiceRoleSupabaseClient();
+    const { data, error } = await supabase.storage
+      .from('ghana-card-scans')
+      .upload(fileName, file, {
+        upsert: false,
+        contentType: file.type,
+      });
+      
+    if (error) throw error;
+    return { success: true, path: data.path };
+  } catch (err: any) {
+    console.error('Failed to upload scan:', err);
+    return { success: false, error: err.message };
+  }
+}
+
 export async function updateCustomerAction(id: string, updates: Partial<Customer>) {
   try {
     const supabase = createServiceRoleSupabaseClient();

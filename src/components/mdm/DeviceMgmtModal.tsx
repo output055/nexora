@@ -61,7 +61,11 @@ export function DeviceMgmtModal({ device, location, onClose }: DeviceMgmtModalPr
     setPingingLocation(true);
     const res = await requestDeviceLocationUpdateAction(device.device_id);
     if (res.success) {
-      toast.success('Location update requested from device.');
+      if (res.data && Object.keys(res.data).length <= 1) {
+        toast.success('Location update requested. No immediate data returned by device.');
+      } else {
+        toast.success('Location update requested from device.');
+      }
     } else {
       toast.error('Failed to request location: ' + res.error);
     }

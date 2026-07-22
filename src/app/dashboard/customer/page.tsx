@@ -19,6 +19,7 @@ import { usePaystackPayment } from 'react-paystack';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/contexts/auth-context';
 import { getCalculatedPaymentStatus, formatCurrency, formatDate } from '@/lib/utils';
+import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
 import type { Customer, Device } from '@/types';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -272,7 +273,7 @@ export default function CustomerDashboard() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div>
                 <p className="text-xs text-slate-500 mb-1">Model</p>
-                <p className="font-semibold text-white">{device.device_model}</p>
+                <p className="font-semibold text-white">{getHumanReadableDeviceName(device.device_model) || device.device_model}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">OS Platform</p>

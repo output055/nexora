@@ -42,6 +42,14 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
   const { data: usersData } = await adminClient.auth.admin.listUsers();
   const usersMap = new Map(usersData?.users.map((u) => [u.id, u.user_metadata?.full_name || u.email]) || []);
 
+  let signedUrl = null;
+  if (customer.ghana_card_scan_path) {
+    const { data } = await adminClient.storage
+      .from('ghana-card-scans')
+      .createSignedUrl(customer.ghana_card_scan_path, 60 * 60);
+    signedUrl = data?.signedUrl;
+  }
+
   const adminEmail = await getSystemSetting('admin_paystack_email') || 'admin@credifon.com';
 
   return (
@@ -70,25 +78,70 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
           
           {/* Customer Card */}
           <div className="bg-[#111827] border border-white/5 rounded-2xl p-6 shadow-xl">
-            <h2 className="text-lg font-semibold text-white mb-4">Contact Info</h2>
-            <div className="space-y-4">
-              <div>
+            <h2 className="text-lg font-semibold text-white mb-4">Customer Details</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2 sm:col-span-1">
                 <p className="text-xs text-slate-500 font-medium">Primary Phone</p>
-                <p className="text-slate-200">{customer.phone_number}</p>
+                <p className="text-slate-200 text-sm mt-0.5">{customer.phone_number}</p>
               </div>
-              {customer.whatsapp_number && (
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">WhatsApp</p>
-                  <p className="text-slate-200">{customer.whatsapp_number}</p>
+              <div className="col-span-2 sm:col-span-1">
+                <p className="text-xs text-slate-500 font-medium">Alternative Phone</p>
+                <p className="text-slate-200 text-sm mt-0.5">{customer.alternative_phone_number || 'N/A'}</p>
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <p className="text-xs text-slate-500 font-medium">WhatsApp</p>
+                <p className="text-slate-200 text-sm mt-0.5">{customer.whatsapp_number || 'N/A'}</p>
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <p className="text-xs text-slate-500 font-medium">Email</p>
+                <p className="text-slate-200 text-sm mt-0.5 truncate" title={customer.email || ''}>{customer.email || 'N/A'}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-xs text-slate-500 font-medium">Digital Address</p>
+                <p className="text-slate-200 text-sm mt-0.5">{customer.digital_address || 'N/A'}</p>
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <p className="text-xs text-slate-500 font-medium">Landmarks</p>
+                <p className="text-slate-200 text-sm mt-0.5">{customer.location_landmarks || 'N/A'}</p>
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <p className="text-xs text-slate-500 font-medium">Residential Status</p>
+                <p className="text-slate-200 text-sm mt-0.5 capitalize">{customer.residential_status?.replace('_', ' ') || 'N/A'}</p>
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <p className="text-xs text-slate-500 font-medium">Occupation</p>
+                <p className="text-slate-200 text-sm mt-0.5">{customer.occupation || 'N/A'}</p>
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <p className="text-xs text-slate-500 font-medium">Place of Work</p>
+                <p className="text-slate-200 text-sm mt-0.5">{customer.place_of_work || 'N/A'}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-xs text-slate-500 font-medium">Landlord Contact</p>
+                <p className="text-slate-200 text-sm mt-0.5">{customer.landlord_contact || 'N/A'}</p>
+              </div>
+              
+              <div className="col-span-2 mt-4 pt-4 border-t border-white/5">
+                <p className="text-xs text-slate-500 font-medium mb-3">Identity Verification</p>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1">Ghana Card ID</p>
+                    <p className="text-slate-200 font-mono text-sm bg-white/5 px-3 py-1.5 rounded-lg inline-block">{customer.ghana_card_id || 'N/A'}</p>
+                  </div>
+                  {signedUrl && (
+                    <div>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-2">ID Scan / Photo</p>
+                      <a href={signedUrl} target="_blank" rel="noopener noreferrer" className="block max-w-sm rounded-xl overflow-hidden border border-white/10 hover:border-blue-500/50 transition-colors group">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img 
+                          src={signedUrl} 
+                          alt="Ghana Card Scan" 
+                          className="w-full h-32 object-cover bg-black/40 group-hover:scale-105 transition-transform duration-500"
+                        />
+                      </a>
+                    </div>
+                  )}
                 </div>
-              )}
-              <div>
-                <p className="text-xs text-slate-500 font-medium">Ghana Card</p>
-                <p className="text-slate-200 font-mono text-sm">{customer.ghana_card_id || 'N/A'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 font-medium">Address</p>
-                <p className="text-slate-200">{customer.digital_address || 'N/A'}</p>
               </div>
             </div>
           </div>

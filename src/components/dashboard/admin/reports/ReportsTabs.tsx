@@ -87,7 +87,7 @@ export function ReportsTabs({ users, payments, devices, expenses }: ReportsTabsP
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <ProfitLossTab payments={payments} expenses={expenses} />
+              <ProfitLossTab payments={payments} expenses={expenses} devices={devices} />
             </motion.div>
           )}
 

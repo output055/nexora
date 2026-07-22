@@ -19,11 +19,12 @@ import autoTable from 'jspdf-autotable';
 interface ProfitLossTabProps {
   payments: any[];
   expenses: any[];
+  devices?: any[];
 }
 
 type FilterType = 'all' | 'today' | 'yesterday' | 'week' | 'month' | 'year';
 
-export function ProfitLossTab({ payments, expenses }: ProfitLossTabProps) {
+export function ProfitLossTab({ payments, expenses, devices = [] }: ProfitLossTabProps) {
   const [filter, setFilter] = useState<FilterType>('month');
 
   // Filter data
@@ -43,11 +44,18 @@ export function ProfitLossTab({ payments, expenses }: ProfitLossTabProps) {
 
     const filteredPayments = payments.filter(p => filterFn(p.created_at));
     const filteredExpenses = expenses.filter(e => filterFn(e.expense_date));
+    const filteredDevices = devices.filter(d => filterFn(d.created_at));
 
     // Aggregate values
     const totalIncome = filteredPayments.reduce((acc, p) => acc + Number(p.amount_paid || 0), 0);
-    const totalExpenses = filteredExpenses.reduce((acc, e) => acc + Number(e.amount || 0), 0);
+    const operatingExpenses = filteredExpenses.reduce((acc, e) => acc + Number(e.amount || 0), 0);
+    const deviceCosts = filteredDevices.reduce((acc, d) => acc + Number(d.base_price || 0), 0);
+    const totalExpenses = operatingExpenses + deviceCosts;
+    
     const netProfit = totalIncome - totalExpenses;
+    
+    const estimatedIncome = filteredDevices.reduce((acc, d) => acc + Number(d.total_owed || 0), 0);
+    const estimatedProfit = estimatedIncome - totalExpenses;
 
     // Build chart data (group by day or month)
     const chartMap: Record<string, { date: string; income: number; expenses: number }> = {};
@@ -67,16 +75,22 @@ export function ProfitLossTab({ payments, expenses }: ProfitLossTabProps) {
       chartMap[key].expenses += Number(e.amount || 0);
     });
 
+    filteredDevices.forEach(d => {
+      const key = format(new Date(d.created_at), fmtString);
+      if (!chartMap[key]) chartMap[key] = { date: key, income: 0, expenses: 0 };
+      chartMap[key].expenses += Number(d.base_price || 0);
+    });
+
     // Sort chart data chronologically
     const chartData = Object.values(chartMap).sort((a, b) => {
       // Very naive sort by string if it's MMM dd, better to parse but this is simple for UI
       return new Date(a.date).getTime() - new Date(b.date).getTime();
     });
 
-    return { totalIncome, totalExpenses, netProfit, chartData };
-  }, [payments, expenses, filter]);
+    return { totalIncome, totalExpenses, netProfit, estimatedProfit, chartData };
+  }, [payments, expenses, devices, filter]);
 
-  const { totalIncome, totalExpenses, netProfit, chartData } = filteredData;
+  const { totalIncome, totalExpenses, netProfit, estimatedProfit, chartData } = filteredData;
 
   const formatGHS = (val: number) => `GHS ${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -124,6 +138,7 @@ export function ProfitLossTab({ payments, expenses }: ProfitLossTabProps) {
       body: [
         ['Total Income (Payments Received)', formatGHS(totalIncome)],
         ['Total Operating Expenses', formatGHS(totalExpenses)],
+        ['Estimated Profit (Expected Revenue - Expenses)', formatGHS(estimatedProfit)],
       ],
     });
 
@@ -200,7 +215,7 @@ export function ProfitLossTab({ payments, expenses }: ProfitLossTabProps) {
       </div>
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp size={20} className="text-emerald-400" />
@@ -220,10 +235,20 @@ export function ProfitLossTab({ payments, expenses }: ProfitLossTabProps) {
         <div className={`border rounded-2xl p-6 ${netProfit >= 0 ? 'bg-blue-500/10 border-blue-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
           <div className="flex items-center gap-2 mb-2">
             <DollarSign size={20} className={netProfit >= 0 ? 'text-blue-400' : 'text-red-400'} />
-            <p className="text-sm font-medium text-slate-400">Net Profit</p>
+            <p className="text-sm font-medium text-slate-400">Realized Profit</p>
           </div>
           <p className={`text-3xl font-bold ${netProfit >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
             {formatGHS(netProfit)}
+          </p>
+        </div>
+
+        <div className={`border rounded-2xl p-6 ${estimatedProfit >= 0 ? 'bg-purple-500/10 border-purple-500/20' : 'bg-orange-500/10 border-orange-500/20'}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <DollarSign size={20} className={estimatedProfit >= 0 ? 'text-purple-400' : 'text-orange-400'} />
+            <p className="text-sm font-medium text-slate-400">Estimated Profit</p>
+          </div>
+          <p className={`text-3xl font-bold ${estimatedProfit >= 0 ? 'text-purple-400' : 'text-orange-400'}`}>
+            {formatGHS(estimatedProfit)}
           </p>
         </div>
       </div>

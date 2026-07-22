@@ -2,6 +2,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
+import { createServerSupabaseClient } from '@/lib/supabase';
 
 type ActionError = {
   message: string;
@@ -61,7 +62,7 @@ export async function fetchUsers() {
 
     // 3. Merge
     const typedUserRoles = (userRoles ?? []) as UserRoleRow[];
-    const users = authData.users.map(u => {
+    let users = authData.users.map(u => {
       const ur = typedUserRoles.find(r => r.user_id === u.id);
       const role = getJoinedRole(ur?.roles ?? null);
       return {
@@ -71,6 +72,23 @@ export async function fetchUsers() {
         role: role ? { id: role.id, name: role.name } : null,
       };
     });
+
+    // 4. Filter superadmin if current user is not a superadmin
+    try {
+      const clientSupabase = await createServerSupabaseClient();
+      const { data: { user } } = await clientSupabase.auth.getUser();
+      if (user) {
+        const currentUserRole = typedUserRoles.find(r => r.user_id === user.id);
+        const roleName = getJoinedRole(currentUserRole?.roles ?? null)?.name?.toLowerCase();
+        
+        if (roleName !== 'superadmin') {
+          users = users.filter(u => u.role?.name?.toLowerCase() !== 'superadmin');
+        }
+      }
+    } catch (e) {
+      // If error fetching current user, default to hiding superadmins for safety
+      users = users.filter(u => u.role?.name?.toLowerCase() !== 'superadmin');
+    }
 
     return { success: true, users };
   } catch (error: unknown) {
