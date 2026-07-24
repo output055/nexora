@@ -67,7 +67,7 @@ export function PaymentHistoryTable({ payments, usersMap, canReversePayment }: P
                   </td>
                   <td className="px-6 py-4 text-right">
                     {canReversePayment && (
-                      <ReversePaymentButton paymentId={p.id} customerId={p.customer_id} />
+                      <ReversePaymentButton paymentId={p.id} />
                     )}
                   </td>
                 </tr>
