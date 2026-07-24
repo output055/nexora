@@ -1,6 +1,6 @@
 'use server';
 
-import { createServerSupabaseClient } from '@/lib/supabase';
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/lib/supabase';
 import { sendSMS } from '@/lib/sms';
 
 export async function getCustomersForSelect() {
@@ -32,7 +32,7 @@ export async function sendBroadcastSMS(
 
   if (!user) return { success: false, error: 'Unauthorized' };
 
-  let query = supabase.from('customers').select('id, full_name, phone:phone_number');
+  let query = supabase.from('customers').select('id, user_id, full_name, phone:phone_number');
 
   if (targetGroup === 'individual' && customerId) {
     query = query.eq('id', customerId);
@@ -67,6 +67,19 @@ export async function sendBroadcastSMS(
     const result = await sendSMS(customer.phone, personalizedMessage, customer.id);
     if (result) {
       sentCount++;
+    }
+
+    // Insert in-app notification
+    if (customer.user_id) {
+      const adminClient = createServiceRoleSupabaseClient();
+      const { error: notifError } = await adminClient.from('notifications').insert({
+        user_id: customer.user_id,
+        title: 'New Broadcast Message',
+        message: personalizedMessage,
+        type: 'info',
+        is_read: false
+      });
+      if (notifError) console.error("Notification Insert Error:", notifError);
     }
   }
 

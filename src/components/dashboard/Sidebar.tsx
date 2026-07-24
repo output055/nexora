@@ -156,6 +156,12 @@ const customerNavItems: NavItem[] = [
     icon: <Shield size={18} />,
     permission: 'view_own_device',
   },
+  {
+    label: 'Notifications',
+    href: '/dashboard/customer/notifications',
+    icon: <Bell size={18} />,
+    permission: 'view_own_device',
+  },
 ];
 
 export function DashboardSidebar() {

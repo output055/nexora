@@ -11,6 +11,14 @@ type Customer = {
   phone: string;
 };
 
+const MESSAGE_TEMPLATES = [
+  { label: 'Friendly Check-in', content: 'Hi {customer_name}, hope you are enjoying your new device from Credifon! Let us know if you need any help.' },
+  { label: 'Payment Reminder', content: 'Hello {customer_name}, this is a gentle reminder that your payment of GHS {amount_due} is coming up soon. Thank you!' },
+  { label: 'Overdue Warning', content: 'URGENT: {customer_name}, your account is overdue. Please pay GHS {amount_due} immediately to avoid device lock.' },
+  { label: 'Device Locked', content: 'Notice: {customer_name}, your device has been locked due to non-payment. Kindly settle your balance to regain access.' },
+  { label: 'Payment Thanks', content: 'Thank you {customer_name} for your recent payment. We appreciate your promptness!' },
+];
+
 export default function BroadcastsPage() {
   const [message, setMessage] = useState('');
   const [targetGroup, setTargetGroup] = useState('all');
@@ -109,7 +117,22 @@ export default function BroadcastsPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Message Content</label>
+            <div className="flex justify-between items-end mb-3">
+              <label className="block text-sm font-medium text-slate-300">Message Content</label>
+            </div>
+            
+            <div className="flex flex-wrap gap-2 mb-3">
+              {MESSAGE_TEMPLATES.map((template, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setMessage(template.content)}
+                  className="px-3 py-1.5 bg-white/5 hover:bg-blue-500/20 border border-white/10 hover:border-blue-500/50 rounded-full text-xs font-medium text-slate-300 hover:text-blue-300 transition-colors"
+                >
+                  {template.label}
+                </button>
+              ))}
+            </div>
+
             <textarea
               rows={6}
               value={message}

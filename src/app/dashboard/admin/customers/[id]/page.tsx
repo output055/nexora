@@ -6,6 +6,7 @@ import { ArrowLeft, User, Smartphone, CreditCard, Calendar, Clock, CheckCircle2,
 import { getCalculatedPaymentStatus } from '@/lib/utils';
 import { RecordPaymentButton } from '@/components/dashboard/admin/RecordPaymentButton';
 import { ReversePaymentButton } from '@/components/dashboard/admin/ReversePaymentButton';
+import { PaymentHistoryTable } from '@/components/dashboard/admin/PaymentHistoryTable';
 import { getSystemSetting } from '@/app/actions/settings';
 import { hasPermission } from '@/lib/permissions';
 
@@ -236,68 +237,11 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
             </div>
             
             <div className="flex-1 overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/5 bg-white/[0.02]">
-                    <th className="text-left text-xs font-semibold text-slate-500 px-6 py-3">Date</th>
-                    <th className="text-left text-xs font-semibold text-slate-500 px-6 py-3">Amount</th>
-                    <th className="text-left text-xs font-semibold text-slate-500 px-6 py-3">Recorded By</th>
-                    <th className="text-left text-xs font-semibold text-slate-500 px-6 py-3">Method</th>
-                    <th className="text-left text-xs font-semibold text-slate-500 px-6 py-3">Ref</th>
-                    <th className="text-right text-xs font-semibold text-slate-500 px-6 py-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payments.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-slate-500 text-sm">
-                        No payments recorded yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    payments.map((p: any) => (
-                      <tr key={p.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2 text-sm text-slate-300">
-                            <Calendar size={14} className="text-slate-500" />
-                            {new Date(p.created_at).toLocaleDateString('en-GB', {
-                              day: 'numeric', month: 'short', year: 'numeric'
-                            })}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-sm font-bold text-emerald-400 tabular-nums">
-                            + GH₵{Number(p.amount_paid).toLocaleString()}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center border border-white/10">
-                              <User size={12} className="text-slate-400" />
-                            </div>
-                            <span className="text-sm text-slate-300">
-                              {usersMap.get(p.collector_id) || 'Unknown User'}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-white/5 text-slate-300 capitalize border border-white/10">
-                            {p.payment_method.replace('_', ' ')}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-xs font-mono text-slate-500">
-                            {p.transaction_reference || '—'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          {canReversePayment ? <ReversePaymentButton paymentId={p.id} /> : <span className="text-slate-600 text-xs">—</span>}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+              <PaymentHistoryTable 
+                payments={payments} 
+                usersMap={Object.fromEntries(usersMap)} 
+                canReversePayment={canReversePayment} 
+              />
             </div>
           </div>
         </div>

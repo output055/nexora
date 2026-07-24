@@ -65,20 +65,18 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
   };
 
   return (
-    <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl">
-      <h2 className="text-xl font-semibold text-white mb-4">MDM Configuration</h2>
-      
+    <div className="space-y-6">
       {message && (
-        <div className={`p-4 rounded-lg mb-4 ${message.type === 'success' ? 'bg-green-500/20 text-green-200 border border-green-500/30' : 'bg-red-500/20 text-red-200 border border-red-500/30'}`}>
+        <div className={`p-4 rounded-lg ${message.type === 'success' ? 'bg-green-500/20 text-green-200 border border-green-500/30' : 'bg-red-500/20 text-red-200 border border-red-500/30'}`}>
           {message.text}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-6">
         
         {/* Financial Settings Section */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-white border-b border-white/5 pb-2">Financial Configuration</h3>
+        <div className="bg-[#111827] border border-white/5 rounded-2xl p-6 shadow-xl space-y-4">
+          <h3 className="text-lg font-semibold text-white mb-2">Financial Configuration</h3>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -120,8 +118,8 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
         </div>
 
         {/* SMS Gateway Settings Section */}
-        <div className="space-y-4 pt-4 border-t border-white/10">
-          <h3 className="text-lg font-medium text-white border-b border-white/5 pb-2">SMS Integration</h3>
+        <div className="bg-[#111827] border border-white/5 rounded-2xl p-6 shadow-xl space-y-4">
+          <h3 className="text-lg font-semibold text-white mb-2">SMS Integration</h3>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -160,8 +158,8 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
         </div>
 
         {/* MDM Settings Section */}
-        <div className="space-y-4 pt-4 border-t border-white/10">
-          <h3 className="text-lg font-medium text-white border-b border-white/5 pb-2">MDM Device Rules</h3>
+        <div className="bg-[#111827] border border-white/5 rounded-2xl p-6 shadow-xl space-y-4">
+          <h3 className="text-lg font-semibold text-white mb-2">MDM Device Rules</h3>
           
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -234,9 +232,9 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 px-4 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50"
+          className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-colors disabled:opacity-50 shadow-lg"
         >
-          {loading ? 'Saving...' : 'Save Settings'}
+          {loading ? 'Saving Settings...' : 'Save Settings'}
         </button>
       </form>
     </div>

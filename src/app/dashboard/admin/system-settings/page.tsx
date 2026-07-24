@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import SettingsForm from '@/components/dashboard/admin/SettingsForm';
 import PaymentGatewayForm from '@/components/dashboard/admin/PaymentGatewayForm';
+import { SupportSettingsCard } from '@/components/dashboard/admin/SupportSettingsCard';
 import { getAllSystemSettings } from '@/app/actions/settings';
 import { Settings as SettingsIcon } from 'lucide-react';
 
@@ -28,8 +29,13 @@ export default async function SettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <SettingsForm initialSettings={initialSettings} />
         
-        {/* Payment Gateway Panel */}
-        <PaymentGatewayForm initialSettings={initialSettings} />
+        <div className="space-y-6">
+          {/* Payment Gateway Panel */}
+          <PaymentGatewayForm initialSettings={initialSettings} />
+          
+          {/* Support Settings Panel */}
+          <SupportSettingsCard />
+        </div>
       </div>
     </div>
   );

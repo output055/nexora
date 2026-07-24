@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UserPlus, Shield, Trash2, Edit2, X, AlertCircle, RefreshCw, Search } from 'lucide-react';
+import { UserPlus, Shield, Trash2, Edit2, X, AlertCircle, RefreshCw, Search, ChevronUp, ChevronDown } from 'lucide-react';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 import { fetchUsers, createUser, updateUserRole, deleteUser, updateUser } from '@/app/actions/users';
 import { usePagination } from '@/lib/hooks/usePagination';
@@ -10,6 +10,8 @@ import { PaginationBar } from './PaginationBar';
 
 type Role = { id: string; name: string };
 type UserWithRole = { id: string; email: string; created_at: string; role: Role | null };
+type SortKey = 'email' | 'created_at';
+type SortDir = 'asc' | 'desc';
 
 export function UserManagement() {
   const [users, setUsers] = useState<UserWithRole[]>([]);
@@ -21,9 +23,16 @@ export function UserManagement() {
   const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Filters
+  // Filters and Sorting
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all'); // 'all' or role id
+  const [sortKey, setSortKey] = useState<SortKey>('created_at');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+  };
 
   // Form State
   const [email, setEmail] = useState('');
@@ -63,12 +72,29 @@ export function UserManagement() {
         (roleFilter === '__no_role__' && !u.role) ||
         u.role?.id === roleFilter;
       return matchSearch && matchRole;
+    }).sort((a, b) => {
+      if (sortKey === 'email') {
+        return sortDir === 'asc' ? a.email.localeCompare(b.email) : b.email.localeCompare(a.email);
+      }
+      if (sortKey === 'created_at') {
+        const aDate = new Date(a.created_at).getTime();
+        const bDate = new Date(b.created_at).getTime();
+        return sortDir === 'asc' ? aDate - bDate : bDate - aDate;
+      }
+      return 0;
     }),
-    [users, search, roleFilter]
+    [users, search, roleFilter, sortKey, sortDir]
   );
 
   const pagination = usePagination(filtered, 10);
   const hasActiveFilters = search || roleFilter !== 'all';
+
+  const SortIcon = ({ field }: { field: SortKey }) => {
+    if (sortKey !== field) return <ChevronUp size={12} className="text-slate-600" />;
+    return sortDir === 'asc' 
+      ? <ChevronUp size={12} className="text-blue-400" />
+      : <ChevronDown size={12} className="text-blue-400" />;
+  };
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -216,9 +242,23 @@ export function UserManagement() {
           <table className="w-full text-left text-sm text-slate-400">
             <thead className="bg-white/5 text-slate-300 font-semibold border-b border-white/5">
               <tr>
-                <th className="px-6 py-4">User Email</th>
+                <th 
+                  className="px-6 py-4 cursor-pointer hover:text-white transition-colors group"
+                  onClick={() => handleSort('email')}
+                >
+                  <div className="flex items-center gap-2">
+                    User Email <SortIcon field="email" />
+                  </div>
+                </th>
                 <th className="px-6 py-4">Role Assignment</th>
-                <th className="px-6 py-4">Created Date</th>
+                <th 
+                  className="px-6 py-4 cursor-pointer hover:text-white transition-colors group"
+                  onClick={() => handleSort('created_at')}
+                >
+                  <div className="flex items-center gap-2">
+                    Created Date <SortIcon field="created_at" />
+                  </div>
+                </th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -300,7 +340,7 @@ export function UserManagement() {
             startIndex={pagination.startIndex}
             endIndex={pagination.endIndex}
             pageSize={pagination.pageSize}
-            pageSizeOptions={[10, 25]}
+            pageSizeOptions={[10, 25, 50, 100]}
             onPageChange={pagination.setPage}
             onPageSizeChange={pagination.setPageSize}
             itemLabel="users"

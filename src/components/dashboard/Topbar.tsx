@@ -1,6 +1,6 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { LogOut, User, ChevronDown, Bell } from 'lucide-react';
@@ -21,6 +21,7 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
 export function Topbar() {
   const { user, logout } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const meta = PAGE_META[pathname] ?? {
@@ -74,7 +75,14 @@ export function Topbar() {
                     <p className="text-xs text-slate-500 truncate mt-0.5">{user.email}</p>
                   </div>
                   <div className="p-1">
-                    <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+                    <button 
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        const isCustomer = user?.roles?.some(r => r.name === 'customer');
+                        router.push(isCustomer ? '/dashboard/customer/profile' : '/dashboard/admin/profile');
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                    >
                       <User size={15} />
                       Profile
                     </button>

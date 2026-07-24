@@ -1,8 +1,10 @@
-'use client';
+import { LifeBuoy, Phone, Mail, FileText } from 'lucide-react';
+import { getSystemSetting } from '@/app/actions/settings';
 
-import { LifeBuoy, Phone, Mail, FileText, ChevronRight } from 'lucide-react';
+export default async function CustomerSupport() {
+  const supportPhone = await getSystemSetting('support_phone') || '+233 54 000 0000';
+  const supportEmail = await getSystemSetting('support_email') || 'support@credifon.app';
 
-export default function CustomerSupport() {
   const faqs = [
     {
       question: 'How do I make a payment?',
@@ -38,7 +40,7 @@ export default function CustomerSupport() {
           <div>
             <h3 className="font-bold text-white mb-1">Call Support</h3>
             <p className="text-sm text-slate-400 mb-3">Speak directly with a customer service representative.</p>
-            <p className="font-mono font-medium text-blue-400">+233 54 000 0000</p>
+            <p className="font-mono font-medium text-blue-400">{supportPhone}</p>
           </div>
         </div>
 
@@ -49,7 +51,7 @@ export default function CustomerSupport() {
           <div>
             <h3 className="font-bold text-white mb-1">Email Us</h3>
             <p className="text-sm text-slate-400 mb-3">Send us an email and we'll respond within 24 hours.</p>
-            <p className="font-medium text-blue-400">support@credifon.app</p>
+            <p className="font-medium text-blue-400">{supportEmail}</p>
           </div>
         </div>
       </div>

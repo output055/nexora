@@ -192,7 +192,11 @@ export function NotificationBell() {
               
               <div className="p-2 border-t border-white/5 shrink-0">
                 <button 
-                  onClick={() => { setIsOpen(false); router.push('/dashboard/admin/notifications'); }}
+                  onClick={() => { 
+                    setIsOpen(false); 
+                    const isCustomer = user?.roles?.some(r => r.name === 'customer');
+                    router.push(isCustomer ? '/dashboard/customer/notifications' : '/dashboard/admin/notifications'); 
+                  }}
                   className="w-full py-2 text-xs font-medium text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
                 >
                   View all notifications
