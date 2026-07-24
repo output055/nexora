@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { ReceiptText, Plus, Trash2, Search, Filter, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { addExpense, deleteExpense } from '@/app/actions/expenses';
 import { usePagination } from '@/lib/hooks/usePagination';
-import { PaginationBar } from './PaginationBar';
+import { PaginationBar } from '../PaginationBar';
 
 interface ExpenseLedgerTabProps {
   expenses: any[];
