@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import type { Session } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
+import { logAuthEventAction } from '@/app/actions/auth';
 import type { AuthContextValue, UserProfile } from '@/types';
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -114,15 +115,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string): Promise<{ error?: string }> => {
     const supabase = createBrowserSupabaseClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
+    
+    if (!error) {
+      logAuthEventAction('login', email).catch(console.error);
+    }
+    
     return error ? { error: error.message } : {};
   }, []);
 
   const logout = useCallback(async () => {
+    if (user?.email) {
+      logAuthEventAction('logout', user.email).catch(console.error);
+    }
+    
     const supabase = createBrowserSupabaseClient();
     await supabase.auth.signOut();
     setUser(null);
     router.push('/login');
-  }, [router]);
+  }, [router, user]);
 
   const hasPermission = useCallback(
     (permission: string) => {

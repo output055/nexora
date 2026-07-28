@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
+import { logAudit } from '@/lib/audit';
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) return error.message;
@@ -29,6 +30,7 @@ export async function addExpense(payload: { amount: number; category: string; de
     if (error) throw error;
 
     revalidatePath('/dashboard/admin/reports');
+    await logAudit(`Added business expense: GH₵${payload.amount} for ${payload.category}`);
     return { success: true };
   } catch (error) {
     return { success: false, error: getErrorMessage(error) };
@@ -42,6 +44,7 @@ export async function deleteExpense(id: string) {
     if (error) throw error;
 
     revalidatePath('/dashboard/admin/reports');
+    await logAudit(`Deleted business expense ID: ${id}`);
     return { success: true };
   } catch (error) {
     return { success: false, error: getErrorMessage(error) };

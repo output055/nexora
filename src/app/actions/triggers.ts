@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
+import { logAudit } from '@/lib/audit';
 
 export async function getTriggers() {
   const supabase = await createServerSupabaseClient();
@@ -29,6 +30,7 @@ export async function createTrigger(data: any) {
   }
 
   revalidatePath('/dashboard/admin/communications/settings');
+  await logAudit(`Created new notification trigger: ${data.event_type || 'Unknown'}`);
   return { success: true };
 }
 
@@ -45,6 +47,7 @@ export async function updateTrigger(id: string, data: any) {
   }
 
   revalidatePath('/dashboard/admin/communications/settings');
+  await logAudit(`Updated notification trigger ID: ${id}`);
   return { success: true };
 }
 
@@ -61,5 +64,6 @@ export async function deleteTrigger(id: string) {
   }
 
   revalidatePath('/dashboard/admin/communications/settings');
+  await logAudit(`Deleted notification trigger ID: ${id}`);
   return { success: true };
 }

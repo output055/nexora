@@ -1,7 +1,9 @@
 'use server';
 
 import { createServiceRoleSupabaseClient } from '@/lib/supabase';
+import { revalidatePath } from 'next/cache';
 import type { Customer } from '@/types';
+import { logAudit } from '@/lib/audit';
 
 export async function getSignedScanUrl(path: string) {
   try {
@@ -58,6 +60,7 @@ export async function updateCustomerAction(id: string, updates: Partial<Customer
 
     if (error) throw new Error(error.message);
     
+    await logAudit(`Updated customer information for ID: ${id}`);
     return { success: true, data };
   } catch (error: any) {
     console.error('Failed to update customer:', error);
@@ -82,6 +85,7 @@ export async function deleteCustomerAction(id: string) {
       throw new Error(error.message);
     }
     
+    await logAudit(`Deleted customer with ID: ${id}`);
     return { success: true };
   } catch (error: any) {
     console.error('Failed to delete customer:', error);

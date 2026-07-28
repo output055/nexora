@@ -7,9 +7,6 @@ import { toast } from 'sonner';
 import { GeoTrackingTab } from './GeoTrackingTab';
 import { SummaryTab } from './SummaryTab';
 import { InstalledAppsTab } from './InstalledAppsTab';
-import { RestrictionsTab } from './RestrictionsTab';
-import { AlertsTab } from './AlertsTab';
-import { AuditLogsTab } from './AuditLogsTab';
 
 import { executeDeviceCommandAction, getDeviceDetailsAction } from '@/app/actions/devices';
 import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
@@ -20,15 +17,12 @@ interface DeviceDetailsViewProps {
   onBack: () => void;
 }
 
-type TabType = 'Summary' | 'Installed Apps' | 'Restrictions' | 'Alerts' | 'Geo-Tracking' | 'Audit Logs';
+type TabType = 'Summary' | 'Installed Apps' | 'Geo-Tracking';
 
 const tabs: { id: TabType; label: string }[] = [
   { id: 'Summary', label: 'Summary' },
   { id: 'Installed Apps', label: 'Installed Apps' },
-  { id: 'Restrictions', label: 'Restrictions' },
-  { id: 'Alerts', label: 'Alerts' },
   { id: 'Geo-Tracking', label: 'Geo-Tracking' },
-  { id: 'Audit Logs', label: 'Audit Logs' },
 ];
 
 export function DeviceDetailsView({ device: initialDevice, location, onBack }: DeviceDetailsViewProps) {
@@ -37,13 +31,21 @@ export function DeviceDetailsView({ device: initialDevice, location, onBack }: D
   const [actionsOpen, setActionsOpen] = useState(false);
   const [lockPin, setLockPin] = useState<string | null>(null);
   const [isCommanding, setIsCommanding] = useState(false);
-  useEffect(() => {
-    const fetchDetails = async () => {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchDetails = async () => {
+    setIsRefreshing(true);
+    try {
       const res = await getDeviceDetailsAction(initialDevice.device_id);
       if (res.success && res.data) {
         setDevice((prev: any) => ({ ...prev, ...res.data }));
       }
-    };
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
     fetchDetails();
   }, [initialDevice.device_id]);
   
@@ -160,9 +162,18 @@ export function DeviceDetailsView({ device: initialDevice, location, onBack }: D
         </div>
 
         {/* Actions Dropdown */}
-        <div className="relative">
+        <div className="relative flex items-center gap-3">
           <button 
-            onClick={() => setActionsOpen(!actionsOpen)}
+            onClick={fetchDetails}
+            disabled={isRefreshing}
+            className="p-2 text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/10 hover:border-white/20 disabled:opacity-50"
+            title="Refresh Device Data"
+          >
+            <RefreshCw size={18} className={isRefreshing ? "animate-spin text-blue-400" : ""} />
+          </button>
+          <div className="relative">
+            <button 
+              onClick={() => setActionsOpen(!actionsOpen)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl transition-colors shadow-lg shadow-blue-500/20"
           >
             Manage Device
@@ -225,6 +236,7 @@ export function DeviceDetailsView({ device: initialDevice, location, onBack }: D
               </>
             )}
           </AnimatePresence>
+          </div>
         </div>
       </div>
 
@@ -258,9 +270,6 @@ export function DeviceDetailsView({ device: initialDevice, location, onBack }: D
           >
             {activeTab === 'Summary' && <SummaryTab device={device} />}
             {activeTab === 'Installed Apps' && <InstalledAppsTab device={device} />}
-            {activeTab === 'Restrictions' && <RestrictionsTab device={device} />}
-            {activeTab === 'Alerts' && <AlertsTab device={device} />}
-            {activeTab === 'Audit Logs' && <AuditLogsTab device={device} />}
             {activeTab === 'Geo-Tracking' && (
               <GeoTrackingTab device={device} initialLocation={location} />
             )}

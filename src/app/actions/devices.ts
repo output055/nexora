@@ -15,6 +15,7 @@ import {
   sendDeviceCommand
 } from '@/lib/manageengine';
 import { getAllSystemSettings } from './settings';
+import { logAudit } from '@/lib/audit';
 
 /**
  * Get all devices (general list)
@@ -163,6 +164,7 @@ export async function executeDeviceCommandAction(deviceId: string, commandName: 
     }
 
     const data = await sendDeviceCommand(deviceId, commandName, payload);
+    await logAudit(`Executed manual MDM command: ${commandName} on device MDM ID: ${deviceId}`);
     return { success: true, data };
   } catch (error: any) {
     console.error(`Action error sending command ${commandName}:`, error);

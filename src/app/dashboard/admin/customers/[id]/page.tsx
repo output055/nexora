@@ -53,6 +53,23 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
 
   const adminEmail = await getSystemSetting('admin_paystack_email') || 'admin@credifon.com';
 
+  const payoffDate = (() => {
+    if (!primaryDevice || primaryDevice.payment_cycle_amount <= 0 || primaryDevice.remaining_balance <= 0) return null;
+    const paymentsLeft = Math.ceil(Number(primaryDevice.remaining_balance) / Number(primaryDevice.payment_cycle_amount));
+    if (paymentsLeft === 0) return null;
+
+    const cycle = customer.payment_cycle || 'monthly';
+    let daysToAdd = 0;
+    if (cycle === 'daily') daysToAdd = (paymentsLeft - 1) * 1;
+    else if (cycle === 'weekly') daysToAdd = (paymentsLeft - 1) * 7;
+    else if (cycle === 'bi_weekly') daysToAdd = (paymentsLeft - 1) * 14;
+    else daysToAdd = (paymentsLeft - 1) * 30;
+    
+    const d = primaryDevice.next_payment_date ? new Date(primaryDevice.next_payment_date) : new Date();
+    d.setHours(d.getHours() + (daysToAdd * 24));
+    return d.toLocaleDateString('en-GB');
+  })();
+
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8">
       {/* Header */}
@@ -176,7 +193,23 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
                     );
                   })()}
                 </div>
-                
+                <div className="pt-4 border-t border-white/5 grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Payments Remaining</p>
+                    <p className="text-slate-200 text-sm font-semibold mt-0.5">
+                      {primaryDevice.payment_cycle_amount > 0 
+                        ? `${Math.ceil(Number(primaryDevice.remaining_balance) / Number(primaryDevice.payment_cycle_amount))} payments left`
+                        : `${primaryDevice.contract_duration_months} Months`}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-slate-500 font-medium">Estimated Payoff</p>
+                    <p className="text-slate-200 text-sm font-semibold mt-0.5">
+                      {payoffDate || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+
                 <div className="pt-4 border-t border-white/5">
                   <p className="text-xs text-slate-500 font-medium mb-1">Outstanding Balance</p>
                   <p className="text-2xl sm:text-3xl font-bold text-white tabular-nums truncate" title={`GH₵ ${Number(primaryDevice.remaining_balance).toLocaleString()}`}>

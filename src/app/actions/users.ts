@@ -3,6 +3,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabaseClient } from '@/lib/supabase';
+import { logAudit } from '@/lib/audit';
 
 type ActionError = {
   message: string;
@@ -122,6 +123,7 @@ export async function createUser(email: string, password: string, roleId: string
     }
 
     revalidatePath('/dashboard/admin/users');
+    await logAudit(`Created new admin user: ${email}`);
     return { success: true, user: data.user };
   } catch (error: unknown) {
     return { success: false, error: getErrorMessage(error) };
@@ -134,6 +136,7 @@ export async function updateUser(userId: string, updates: { password?: string })
     const { error } = await supabase.auth.admin.updateUserById(userId, updates);
     if (error) throw error;
     
+    await logAudit(`Updated user: ${userId}`);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: getErrorMessage(error) };
@@ -155,6 +158,7 @@ export async function updateUserRole(userId: string, roleId: string) {
     }
 
     revalidatePath('/dashboard/admin/users');
+    await logAudit(`Updated role for user: ${userId}`);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: getErrorMessage(error) };
@@ -168,6 +172,7 @@ export async function deleteUser(userId: string) {
     if (error) throw error;
 
     revalidatePath('/dashboard/admin/users');
+    await logAudit(`Deleted user: ${userId}`);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: getErrorMessage(error) };

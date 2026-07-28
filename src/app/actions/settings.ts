@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
+import { logAudit } from '@/lib/audit';
 
 /**
  * Get a specific system setting by key.
@@ -67,7 +68,8 @@ export async function updateSystemSetting(key: string, value: string): Promise<{
       return { success: false, error: error.message };
     }
 
-    revalidatePath('/dashboard/settings');
+    revalidatePath('/dashboard/admin/settings');
+    await logAudit(`Updated system setting: ${key}`);
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -103,6 +105,7 @@ export async function updateSystemSettings(settings: Record<string, string>): Pr
 
     revalidatePath('/dashboard/settings');
     revalidatePath('/dashboard/admin/system-settings');
+    await logAudit(`Updated multiple system settings in bulk`);
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };

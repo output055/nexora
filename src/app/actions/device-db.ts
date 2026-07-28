@@ -1,7 +1,9 @@
 'use server';
 
 import { createServiceRoleSupabaseClient } from '@/lib/supabase';
+import { revalidatePath } from 'next/cache';
 import type { Device } from '@/types';
+import { logAudit } from '@/lib/audit';
 
 export async function updateDeviceAction(id: string, updates: Partial<Device>) {
   try {
@@ -21,6 +23,9 @@ export async function updateDeviceAction(id: string, updates: Partial<Device>) {
 
     if (error) throw new Error(error.message);
     
+    revalidatePath('/dashboard/admin/devices');
+    revalidatePath(`/dashboard/admin/customers/${updates.customer_id || ''}`);
+    await logAudit(`Updated device details for ID: ${id}`);
     return { success: true, data };
   } catch (error: any) {
     console.error('Failed to update device:', error);
@@ -44,6 +49,9 @@ export async function deleteDeviceAction(id: string) {
       throw new Error(error.message);
     }
     
+    revalidatePath('/dashboard/admin/devices');
+    revalidatePath('/dashboard/admin/customers');
+    await logAudit(`Deleted device with ID: ${id}`);
     return { success: true };
   } catch (error: any) {
     console.error('Failed to delete device:', error);
