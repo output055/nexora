@@ -2,12 +2,16 @@
 
 import { useState } from 'react';
 import { updateSystemSettings } from '@/app/actions/settings';
+import { useAuth } from '@/contexts/auth-context';
 
 interface SettingsFormProps {
   initialSettings: Record<string, string>;
 }
 
 export default function SettingsForm({ initialSettings }: SettingsFormProps) {
+  const { user } = useAuth();
+  const isPaystackReviewer = user?.roles.some(r => r.name === 'paystack_reviewer');
+
   const [lockCommand, setLockCommand] = useState(
     initialSettings['mdm_overdue_lock_command'] || 'LostMode'
   );
@@ -75,47 +79,49 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
       <form onSubmit={handleSubmit} className="space-y-6">
         
         {/* Financial Settings Section */}
-        <div className="bg-[#111827] border border-white/5 rounded-2xl p-6 shadow-xl space-y-4">
-          <h3 className="text-lg font-semibold text-white mb-2">Financial Configuration</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Interest / Installation Fee (%)
-              </label>
-              <p className="text-xs text-gray-400 mb-2">
-                The percentage added to the base device price.
-              </p>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={interestRate}
-                onChange={(e) => setInterestRate(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-                placeholder="30"
-              />
-            </div>
+        {!isPaystackReviewer && (
+          <div className="bg-[#111827] border border-white/5 rounded-2xl p-6 shadow-xl space-y-4">
+            <h3 className="text-lg font-semibold text-white mb-2">Financial Configuration</h3>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Down Payment (%)
-              </label>
-              <p className="text-xs text-gray-400 mb-2">
-                The percentage of the total contract value required upfront.
-              </p>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={downPaymentRate}
-                onChange={(e) => setDownPaymentRate(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-                placeholder="40"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Interest / Installation Fee (%)
+                </label>
+                <p className="text-xs text-gray-400 mb-2">
+                  The percentage added to the base device price.
+                </p>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={interestRate}
+                  onChange={(e) => setInterestRate(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                  placeholder="30"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Down Payment (%)
+                </label>
+                <p className="text-xs text-gray-400 mb-2">
+                  The percentage of the total contract value required upfront.
+                </p>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={downPaymentRate}
+                  onChange={(e) => setDownPaymentRate(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                  placeholder="40"
+                />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* SMS Gateway Settings Section */}
         <div className="bg-[#111827] border border-white/5 rounded-2xl p-6 shadow-xl space-y-4">

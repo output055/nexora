@@ -47,6 +47,19 @@ const getAdminClient = () => {
   });
 };
 
+import { hasPermission } from '@/lib/permissions';
+
+async function checkManageUsersAccess() {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) throw new Error('Unauthorized');
+  
+  const hasAccess = await hasPermission(user.id, 'manage_users');
+  if (!hasAccess) throw new Error('Permission denied: Requires manage_users');
+  
+  return user;
+}
+
 export async function fetchUsers() {
   try {
     const supabase = getAdminClient();
@@ -99,6 +112,7 @@ export async function fetchUsers() {
 
 export async function createUser(email: string, password: string, roleId: string) {
   try {
+    await checkManageUsersAccess();
     const supabase = getAdminClient();
     
     // 1. Create User in Auth
@@ -132,6 +146,7 @@ export async function createUser(email: string, password: string, roleId: string
 
 export async function updateUser(userId: string, updates: { password?: string }) {
   try {
+    await checkManageUsersAccess();
     const supabase = getAdminClient();
     const { error } = await supabase.auth.admin.updateUserById(userId, updates);
     if (error) throw error;
@@ -145,6 +160,7 @@ export async function updateUser(userId: string, updates: { password?: string })
 
 export async function updateUserRole(userId: string, roleId: string) {
   try {
+    await checkManageUsersAccess();
     const supabase = getAdminClient();
     
     // Delete any existing roles for this user
@@ -167,6 +183,7 @@ export async function updateUserRole(userId: string, roleId: string) {
 
 export async function deleteUser(userId: string) {
   try {
+    await checkManageUsersAccess();
     const supabase = getAdminClient();
     const { error } = await supabase.auth.admin.deleteUser(userId);
     if (error) throw error;

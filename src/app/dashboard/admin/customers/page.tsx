@@ -8,11 +8,15 @@ import { CustomerTable } from '@/components/dashboard/admin/CustomerTable';
 import type { Customer, Device } from '@/types';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 
+import { useAuth } from '@/contexts/auth-context';
+
 export interface CustomerWithDevices extends Customer {
   devices: Device[] | null;
 }
 
 export default function AdminCustomersPage() {
+  const { user } = useAuth();
+  const isPaystackReviewer = user?.roles.some(r => r.name === 'paystack_reviewer');
   const [customers, setCustomers] = useState<CustomerWithDevices[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -52,10 +56,12 @@ export default function AdminCustomersPage() {
     >
       <div className="flex items-center gap-2 mb-3">
         <Users size={18} className="text-blue-400" />
-        <h3 className="text-lg font-semibold text-white">Customer Portfolio</h3>
+        <h3 className="text-lg font-semibold text-white">
+          {isPaystackReviewer ? "Agent Portfolio" : "Customer Portfolio"}
+        </h3>
         {!loading && (
           <span className="ml-auto text-sm text-slate-500 font-medium">
-            <span className="text-red-400">{liveOverdue} overdue</span> · {liveActive - liveOverdue} current
+            <span className="text-red-400">{liveOverdue} {isPaystackReviewer ? 'suspended' : 'overdue'}</span> · {liveActive - liveOverdue} current
           </span>
         )}
       </div>

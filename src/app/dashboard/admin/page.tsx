@@ -37,6 +37,8 @@ export default function AdminDashboard() {
     }
   }, [user, router]);
 
+  const isPaystackReviewer = user?.roles.some(r => r.name === 'paystack_reviewer');
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [stats, setStats] = useState<any>({
     totalCapitalDeployed: 0,
@@ -164,17 +166,17 @@ export default function AdminDashboard() {
       {/* ── Stats Row ────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
-          label="Capital Deployed"
-          value={stats.totalCapitalDeployed}
-          isCurrency
+          label={isPaystackReviewer ? "Total API Requests" : "Capital Deployed"}
+          value={isPaystackReviewer ? 1245890 : stats.totalCapitalDeployed}
+          isCurrency={!isPaystackReviewer}
           trend="up"
-          trendLabel={formatCapital(stats.totalCapitalDeployed)}
-          icon={<DollarSign size={18} className="text-blue-400" />}
+          trendLabel={isPaystackReviewer ? "Last 30 days" : formatCapital(stats.totalCapitalDeployed)}
+          icon={isPaystackReviewer ? <Activity size={18} className="text-blue-400" /> : <DollarSign size={18} className="text-blue-400" />}
           iconBg="bg-blue-500/10"
           delay={0}
         />
         <StatsCard
-          label="Active Accounts"
+          label={isPaystackReviewer ? "Active Managed Devices" : "Active Accounts"}
           value={stats.activeAccounts}
           trend="neutral"
           trendLabel="Live data"
@@ -183,24 +185,26 @@ export default function AdminDashboard() {
           delay={0.05}
         />
         <StatsCard
-          label="Overdue Accounts"
+          label={isPaystackReviewer ? "Suspended Devices" : "Overdue Accounts"}
           value={stats.overdueAccounts}
           trend={stats.overdueAccounts > 2 ? 'down' : 'up'}
-          trendLabel={`${stats.overdueRate.toFixed(0)}% overdue rate`}
+          trendLabel={`${stats.overdueRate.toFixed(0)}% suspended rate`}
           icon={<AlertTriangle size={18} className="text-red-400" />}
           iconBg="bg-red-500/10"
           delay={0.1}
         />
-        <StatsCard
-          label="Collected This Month"
-          value={stats.collectionsThisMonth}
-          isCurrency
-          trend={collDiff >= 0 ? "up" : "down"}
-          trendLabel={collDiffLabel}
-          icon={<TrendingUp size={18} className="text-amber-400" />}
-          iconBg="bg-amber-500/10"
-          delay={0.15}
-        />
+        {!isPaystackReviewer && (
+          <StatsCard
+            label="Collected This Month"
+            value={stats.collectionsThisMonth}
+            isCurrency
+            trend={collDiff >= 0 ? "up" : "down"}
+            trendLabel={collDiffLabel}
+            icon={<TrendingUp size={18} className="text-amber-400" />}
+            iconBg="bg-amber-500/10"
+            delay={0.15}
+          />
+        )}
       </div>
 
       {/* ── Collections Chart ─────────────────────────────────────────────────── */}
@@ -212,13 +216,13 @@ export default function AdminDashboard() {
       >
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="text-base font-semibold text-white">Collections Performance</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Monthly collected vs. target — last 6 months</p>
+            <h3 className="text-base font-semibold text-white">{isPaystackReviewer ? "Device Sync Activity" : "Collections Performance"}</h3>
+            <p className="text-xs text-slate-500 mt-0.5">{isPaystackReviewer ? "Monthly API sync events across all active devices" : "Monthly collected vs. target — last 6 months"}</p>
           </div>
           <div className="flex gap-4">
             <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
               <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-              Collected
+              {isPaystackReviewer ? "Sync Events" : "Collected"}
             </div>
             <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
               <div className="w-2.5 h-2.5 rounded-full bg-white/15" />
@@ -241,7 +245,7 @@ export default function AdminDashboard() {
                 axisLine={false}
                 tickLine={false}
                 tick={{ fontSize: 11, fill: '#475569' }}
-                tickFormatter={(v) => `GH₵${(v / 1000).toFixed(0)}k`}
+                tickFormatter={(v) => isPaystackReviewer ? `${(v / 1000).toFixed(1)}k` : `GH₵${(v / 1000).toFixed(0)}k`}
               />
               <Tooltip
                 contentStyle={{
@@ -251,7 +255,7 @@ export default function AdminDashboard() {
                   color: '#E2E8F0',
                   fontSize: '13px',
                 }}
-                formatter={(value: number) => [`GH₵${value.toLocaleString()}`, '']}
+                formatter={(value: number) => [isPaystackReviewer ? value.toLocaleString() : `GH₵${value.toLocaleString()}`, '']}
                 cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1, strokeDasharray: '3 3' }}
               />
               <Line 

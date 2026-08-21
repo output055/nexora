@@ -15,7 +15,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         router.replace('/login');
       } else {
         const hasAdminAccess = user.roles.some((r) => 
-          ['superadmin', 'admin', 'field_agent'].includes(r.name)
+          ['superadmin', 'admin', 'field_agent', 'paystack_reviewer'].includes(r.name)
         );
         
         if (!hasAdminAccess) {
@@ -36,7 +36,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // Prevent flash of content if user doesn't have access
   const hasAdminAccess = user.roles.some((r) => 
-    ['superadmin', 'admin', 'field_agent'].includes(r.name)
+    ['superadmin', 'admin', 'field_agent', 'paystack_reviewer'].includes(r.name)
   );
   
   if (!hasAdminAccess) return null;
