@@ -20,6 +20,9 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
   const canLogPayment = await hasPermission(user.id, 'log_payment');
   const canReversePayment = await hasPermission(user.id, 'reverse_payment');
 
+  const { data: userRoleData } = await supabase.from('user_roles').select('role:roles(name)').eq('user_id', user.id);
+  const isPaystackReviewer = userRoleData?.some((r: any) => r.role?.name === 'paystack_reviewer');
+
   const { data: customer, error } = await supabase
     .from('customers')
     .select(`
@@ -92,11 +95,11 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Col: Customer & Device Info */}
-        <div className="lg:col-span-1 space-y-6">
+        <div className={`space-y-6 ${isPaystackReviewer ? 'lg:col-span-3' : 'lg:col-span-1'}`}>
           
           {/* Customer Card */}
           <div className="bg-[#111827] border border-white/5 rounded-2xl p-6 shadow-xl">
-            <h2 className="text-lg font-semibold text-white mb-4">Customer Details</h2>
+            <h2 className="text-lg font-semibold text-white mb-4">{isPaystackReviewer ? 'Agent Details' : 'Customer Details'}</h2>
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 sm:col-span-1">
                 <p className="text-xs text-slate-500 font-medium">Primary Phone</p>
@@ -122,22 +125,27 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
                 <p className="text-xs text-slate-500 font-medium">Landmarks</p>
                 <p className="text-slate-200 text-sm mt-0.5">{customer.location_landmarks || 'N/A'}</p>
               </div>
-              <div className="col-span-2 sm:col-span-1">
-                <p className="text-xs text-slate-500 font-medium">Residential Status</p>
-                <p className="text-slate-200 text-sm mt-0.5 capitalize">{customer.residential_status?.replace('_', ' ') || 'N/A'}</p>
-              </div>
-              <div className="col-span-2 sm:col-span-1">
-                <p className="text-xs text-slate-500 font-medium">Occupation</p>
-                <p className="text-slate-200 text-sm mt-0.5">{customer.occupation || 'N/A'}</p>
-              </div>
-              <div className="col-span-2 sm:col-span-1">
-                <p className="text-xs text-slate-500 font-medium">Place of Work</p>
-                <p className="text-slate-200 text-sm mt-0.5">{customer.place_of_work || 'N/A'}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-xs text-slate-500 font-medium">Landlord Contact</p>
-                <p className="text-slate-200 text-sm mt-0.5">{customer.landlord_contact || 'N/A'}</p>
-              </div>
+              {/* Lending/Consumer Specific Fields - Hide from Reviewer */}
+              {!isPaystackReviewer && (
+                <>
+                  <div className="col-span-2 sm:col-span-1">
+                    <p className="text-xs text-slate-500 font-medium">Residential Status</p>
+                    <p className="text-slate-200 text-sm mt-0.5 capitalize">{customer.residential_status?.replace('_', ' ') || 'N/A'}</p>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <p className="text-xs text-slate-500 font-medium">Occupation</p>
+                    <p className="text-slate-200 text-sm mt-0.5">{customer.occupation || 'N/A'}</p>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <p className="text-xs text-slate-500 font-medium">Place of Work</p>
+                    <p className="text-slate-200 text-sm mt-0.5">{customer.place_of_work || 'N/A'}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-xs text-slate-500 font-medium">Landlord Contact</p>
+                    <p className="text-slate-200 text-sm mt-0.5">{customer.landlord_contact || 'N/A'}</p>
+                  </div>
+                </>
+              )}
               
               <div className="col-span-2 mt-4 pt-4 border-t border-white/5">
                 <p className="text-xs text-slate-500 font-medium mb-3">Identity Verification</p>
@@ -165,7 +173,7 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
           </div>
 
           {/* Active Device Card */}
-          {primaryDevice && (
+          {primaryDevice && !isPaystackReviewer && (
             <div className="bg-[#111827] border border-white/5 rounded-2xl p-6 shadow-xl">
               <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
                 <Smartphone size={18} className="text-blue-400" />
@@ -188,49 +196,56 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
                             ? 'bg-amber-500/15 text-amber-400' 
                             : 'bg-emerald-500/15 text-emerald-400'
                       }`}>
-                        {status === 'overdue' ? 'Overdue' : status === 'completed' ? 'Completed' : 'Current'}
+                        {isPaystackReviewer
+                          ? (status === 'overdue' ? 'Suspended' : 'Active')
+                          : (status === 'overdue' ? 'Overdue' : status === 'completed' ? 'Completed' : 'Current')}
                       </span>
                     );
                   })()}
                 </div>
-                <div className="pt-4 border-t border-white/5 grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-slate-500 font-medium">Payments Remaining</p>
-                    <p className="text-slate-200 text-sm font-semibold mt-0.5">
-                      {primaryDevice.payment_cycle_amount > 0 
-                        ? `${Math.ceil(Number(primaryDevice.remaining_balance) / Number(primaryDevice.payment_cycle_amount))} payments left`
-                        : `${primaryDevice.contract_duration_months} Months`}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-slate-500 font-medium">Estimated Payoff</p>
-                    <p className="text-slate-200 text-sm font-semibold mt-0.5">
-                      {payoffDate || 'N/A'}
-                    </p>
-                  </div>
-                </div>
+                
+                {!isPaystackReviewer && (
+                  <>
+                    <div className="pt-4 border-t border-white/5 grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Payments Remaining</p>
+                        <p className="text-slate-200 text-sm font-semibold mt-0.5">
+                          {primaryDevice.payment_cycle_amount > 0 
+                            ? `${Math.ceil(Number(primaryDevice.remaining_balance) / Number(primaryDevice.payment_cycle_amount))} payments left`
+                            : `${primaryDevice.contract_duration_months} Months`}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500 font-medium">Estimated Payoff</p>
+                        <p className="text-slate-200 text-sm font-semibold mt-0.5">
+                          {payoffDate || 'N/A'}
+                        </p>
+                      </div>
+                    </div>
 
-                <div className="pt-4 border-t border-white/5">
-                  <p className="text-xs text-slate-500 font-medium mb-1">Outstanding Balance</p>
-                  <p className="text-2xl sm:text-3xl font-bold text-white tabular-nums truncate" title={`GH₵ ${Number(primaryDevice.remaining_balance).toLocaleString()}`}>
-                    GH₵{Number(primaryDevice.remaining_balance).toLocaleString()}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    of GH₵{Number(primaryDevice.total_owed).toLocaleString()} total
-                  </p>
-                </div>
+                    <div className="pt-4 border-t border-white/5">
+                      <p className="text-xs text-slate-500 font-medium mb-1">Outstanding Balance</p>
+                      <p className="text-2xl sm:text-3xl font-bold text-white tabular-nums truncate" title={`GH₵ ${Number(primaryDevice.remaining_balance).toLocaleString()}`}>
+                        GH₵{Number(primaryDevice.remaining_balance).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        of GH₵{Number(primaryDevice.total_owed).toLocaleString()} total
+                      </p>
+                    </div>
 
-                <div className="pt-4 border-t border-white/5 flex items-center justify-between">
-                  <p className="text-xs text-slate-500 font-medium">Next Payment</p>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-amber-400">
-                      {new Date(primaryDevice.next_payment_date).toLocaleDateString()}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      GH₵{Number(primaryDevice.payment_cycle_amount).toLocaleString()} / {customer.payment_cycle}
-                    </p>
-                  </div>
-                </div>
+                    <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+                      <p className="text-xs text-slate-500 font-medium">Next Payment</p>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-amber-400">
+                          {new Date(primaryDevice.next_payment_date).toLocaleDateString()}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          GH₵{Number(primaryDevice.payment_cycle_amount).toLocaleString()} / {customer.payment_cycle}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {canLogPayment ? (
@@ -257,27 +272,29 @@ export default async function CustomerDetailsPage({ params }: { params: Promise<
         </div>
 
         {/* Right Col: Payment History */}
-        <div className="lg:col-span-2">
-          <div className="bg-[#111827] border border-white/5 rounded-2xl shadow-xl overflow-hidden flex flex-col h-full">
-            <div className="p-6 border-b border-white/5 flex items-center justify-between bg-[#0D1526]">
-              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                <CreditCard size={18} className="text-emerald-400" />
-                Payment History
-              </h2>
-              <div className="text-sm text-slate-400">
-                {payments.length} total payments
+        {!isPaystackReviewer && (
+          <div className="lg:col-span-2">
+            <div className="bg-[#111827] border border-white/5 rounded-2xl shadow-xl overflow-hidden flex flex-col h-full">
+              <div className="p-6 border-b border-white/5 flex items-center justify-between bg-[#0D1526]">
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <CreditCard size={18} className="text-emerald-400" />
+                  Payment History
+                </h2>
+                <div className="text-sm text-slate-400">
+                  {payments.length} total payments
+                </div>
+              </div>
+              
+              <div className="flex-1 overflow-x-auto">
+                <PaymentHistoryTable 
+                  payments={payments} 
+                  usersMap={Object.fromEntries(usersMap)} 
+                  canReversePayment={canReversePayment} 
+                />
               </div>
             </div>
-            
-            <div className="flex-1 overflow-x-auto">
-              <PaymentHistoryTable 
-                payments={payments} 
-                usersMap={Object.fromEntries(usersMap)} 
-                canReversePayment={canReversePayment} 
-              />
-            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

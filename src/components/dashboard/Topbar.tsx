@@ -24,10 +24,19 @@ export function Topbar() {
   const router = useRouter();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const meta = PAGE_META[pathname] ?? {
+  const isPaystackReviewer = user?.roles?.some(r => r.name === 'paystack_reviewer');
+
+  let meta = PAGE_META[pathname] ?? {
     title: pathname.split('/').filter(Boolean).pop()?.replace(/-/g, ' ') ?? 'Dashboard',
     subtitle: '',
   };
+
+  if (isPaystackReviewer && pathname === '/dashboard/admin/customers') {
+    meta = {
+      title: 'Managed Agents',
+      subtitle: 'Master list of all active agent profiles and device subscriptions.',
+    };
+  }
 
   const handleLogout = async () => {
     setDropdownOpen(false);

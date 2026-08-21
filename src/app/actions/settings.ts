@@ -3,6 +3,7 @@
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
+import { hasPermission } from '@/lib/permissions';
 
 /**
  * Get a specific system setting by key.
@@ -53,6 +54,12 @@ export async function updateSystemSetting(key: string, value: string): Promise<{
       return { success: false, error: 'Unauthorized' };
     }
     
+    // Permission Check
+    const hasAccess = await hasPermission(userData.user.id, 'manage_settings');
+    if (!hasAccess) {
+      return { success: false, error: 'Permission denied: Requires manage_settings' };
+    }
+    
     // Check if user has permission (optional, since this is an admin dashboard action, 
     // but good practice. For now, we trust the UI guard, but let's just use the service role)
     const supabaseAdmin = createServiceRoleSupabaseClient();
@@ -87,6 +94,12 @@ export async function updateSystemSettings(settings: Record<string, string>): Pr
     const { data: userData, error: authError } = await userClient.auth.getUser();
     if (authError || !userData?.user) {
       return { success: false, error: 'Unauthorized' };
+    }
+    
+    // Permission Check
+    const hasAccess = await hasPermission(userData.user.id, 'manage_settings');
+    if (!hasAccess) {
+      return { success: false, error: 'Permission denied: Requires manage_settings' };
     }
     
     const supabaseAdmin = createServiceRoleSupabaseClient();

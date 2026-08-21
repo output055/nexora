@@ -164,6 +164,24 @@ const customerNavItems: NavItem[] = [
   },
 ];
 
+const paystackNavItems: NavItem[] = [
+  {
+    label: 'Platform Overview',
+    href: '/dashboard/admin',
+    icon: <LayoutDashboard size={18} />,
+  },
+  {
+    label: 'Managed Agents',
+    href: '/dashboard/admin/customers',
+    icon: <Users size={18} />,
+  },
+  {
+    label: 'System Settings',
+    href: '/dashboard/admin/system-settings',
+    icon: <Settings size={18} />,
+  }
+];
+
 export function DashboardSidebar() {
   const pathname = usePathname();
   const { user, loading, hasPermission } = useAuth();
@@ -174,8 +192,9 @@ export function DashboardSidebar() {
   const isRetailer = user?.roles.some((r) => ['field_agent', 'shop_manager'].includes(r.name)) &&
     !user?.roles.some((r) => ['admin', 'superadmin'].includes(r.name));
   const isCustomer = user?.roles.some((r) => r.name === 'customer');
+  const isPaystackReviewer = user?.roles.some((r) => r.name === 'paystack_reviewer');
 
-  const navItems = isCustomer ? customerNavItems : (isRetailer ? retailerNavItems : adminNavItems);
+  const navItems = isPaystackReviewer ? paystackNavItems : (isCustomer ? customerNavItems : (isRetailer ? retailerNavItems : adminNavItems));
 
   useEffect(() => {
     navItems.forEach((item) => {

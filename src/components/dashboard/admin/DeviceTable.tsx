@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { getCalculatedPaymentStatus } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/contexts/auth-context';
 import Link from 'next/link';
 import { Smartphone, Apple, CheckCircle2, Lock, XCircle, Search, Filter, RefreshCw, X, ChevronDown, ChevronUp, FileText, Unlock, Loader2, Edit2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -26,6 +27,9 @@ type PlatformFilter = 'all' | 'iOS' | 'Android';
 type LockFilter = 'all' | 'locked' | 'unlocked';
 
 export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
+  const { user } = useAuth();
+  const isPaystackReviewer = user?.roles.some(r => r.name === 'paystack_reviewer');
+  
   const [search, setSearch] = useState('');
   const [filterPlatform, setFilterPlatform] = useState<PlatformFilter>('all');
   const [filterLock, setFilterLock] = useState<LockFilter>('all');
@@ -256,11 +260,9 @@ export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
                               ? 'bg-amber-500/15 text-amber-400'
                               : 'bg-emerald-500/15 text-emerald-400'
                         }`}>
-                          {status === 'overdue' 
-                            ? 'Overdue' 
-                            : status === 'completed'
-                              ? 'Completed'
-                              : 'Current'
+                          {isPaystackReviewer 
+                            ? (status === 'overdue' ? 'Suspended' : 'Active') 
+                            : (status === 'overdue' ? 'Overdue' : status === 'completed' ? 'Completed' : 'Current')
                           }
                         </span>
                       );

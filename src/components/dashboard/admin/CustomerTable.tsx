@@ -31,7 +31,8 @@ type CycleFilter = 'all' | 'daily' | 'weekly' | 'bi_weekly';
 
 export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProps) {
   const router = useRouter();
-  const { hasPermission } = useAuth();
+  const { user, hasPermission } = useAuth();
+  const isPaystackReviewer = user?.roles.some(r => r.name === 'paystack_reviewer');
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<StatusFilter>('all');
   const [filterPlatform, setFilterPlatform] = useState<PlatformFilter>('all');
@@ -216,26 +217,29 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
             ))}
           </div>
 
-          <div className="w-px bg-white/8 self-stretch mx-1" />
-
           {/* Payment cycle */}
-          <div className="flex gap-1.5 items-center">
-            <span className="text-xs text-slate-600 font-medium mr-0.5">Cycle:</span>
-            {(['all', 'daily', 'weekly', 'bi_weekly'] as const).map((c) => (
-              <button
-                key={c}
-                id={`filter-cycle-${c}`}
-                onClick={() => setFilterCycle(c)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  filterCycle === c
-                    ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30'
-                    : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/8 hover:text-slate-300'
-                }`}
-              >
-                {c === 'all' ? 'All' : cycleLabel[c]}
-              </button>
-            ))}
-          </div>
+          {!isPaystackReviewer && (
+            <>
+              <div className="w-px bg-white/8 self-stretch mx-1" />
+              <div className="flex gap-1.5 items-center">
+              <span className="text-xs text-slate-600 font-medium mr-0.5">Cycle:</span>
+              {(['all', 'daily', 'weekly', 'bi_weekly'] as const).map((c) => (
+                <button
+                  key={c}
+                  id={`filter-cycle-${c}`}
+                  onClick={() => setFilterCycle(c)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    filterCycle === c
+                      ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30'
+                      : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/8 hover:text-slate-300'
+                  }`}
+                >
+                  {c === 'all' ? 'All' : cycleLabel[c]}
+                </button>
+              ))}
+            </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -245,11 +249,11 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
           <thead>
             <tr className="border-b border-white/5">
               {[
-                { label: 'Customer', key: 'full_name' as SortKey },
+                { label: isPaystackReviewer ? 'Agent' : 'Customer', key: 'full_name' as SortKey },
                 { label: 'Device', key: null },
                 { label: 'Platform', key: null },
-                { label: 'Cycle', key: null },
-                { label: 'Outstanding', key: 'remaining_balance' as SortKey },
+                ...(isPaystackReviewer ? [] : [{ label: 'Cycle', key: null }]),
+                ...(isPaystackReviewer ? [] : [{ label: 'Outstanding', key: 'remaining_balance' as SortKey }]),
                 { label: 'Status', key: 'payment_status' as SortKey },
                 { label: 'Registered', key: 'created_at' as SortKey },
                 { label: '', key: null }, // Actions column
@@ -309,24 +313,28 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                       <span className="text-slate-500">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3.5">
-                    <p className="text-sm text-slate-300 capitalize">
-                      {c.payment_cycle ? cycleLabel[c.payment_cycle] ?? c.payment_cycle : '—'}
-                    </p>
-                    {primaryDevice?.payment_cycle_amount ? (
-                      <p className="text-xs font-semibold text-emerald-400 mt-0.5">
-                        GH₵{Number(primaryDevice.payment_cycle_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </p>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <p className={`text-sm font-bold tabular-nums ${
-                      (primaryDevice?.remaining_balance || 0) > 0 ? 'text-white' : 'text-emerald-400'
-                    }`}>
-                      {(primaryDevice?.remaining_balance || 0) === 0 ? 'Paid ✓' : `GH₵${(primaryDevice?.remaining_balance || 0).toLocaleString()}`}
-                    </p>
-                    <p className="text-xs text-slate-600 mt-0.5">of GH₵{(primaryDevice?.total_owed || 0).toLocaleString()}</p>
-                  </td>
+                  {!isPaystackReviewer && (
+                    <>
+                      <td className="px-4 py-3.5">
+                        <p className="text-sm text-slate-300 capitalize">
+                          {c.payment_cycle ? cycleLabel[c.payment_cycle] ?? c.payment_cycle : '—'}
+                        </p>
+                        {primaryDevice?.payment_cycle_amount ? (
+                          <p className="text-xs font-semibold text-emerald-400 mt-0.5">
+                            GH₵{Number(primaryDevice.payment_cycle_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </p>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <p className={`text-sm font-bold tabular-nums ${
+                          (primaryDevice?.remaining_balance || 0) > 0 ? 'text-white' : 'text-emerald-400'
+                        }`}>
+                          {(primaryDevice?.remaining_balance || 0) === 0 ? 'Paid ✓' : `GH₵${(primaryDevice?.remaining_balance || 0).toLocaleString()}`}
+                        </p>
+                        <p className="text-xs text-slate-600 mt-0.5">of GH₵{(primaryDevice?.total_owed || 0).toLocaleString()}</p>
+                      </td>
+                    </>
+                  )}
                   <td className="px-4 py-3.5">
                     {(() => {
                       const status = primaryDevice ? getCalculatedPaymentStatus(primaryDevice.payment_status, primaryDevice.remaining_balance, primaryDevice.next_payment_date) : null;
@@ -345,7 +353,9 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
                                 ? 'bg-amber-400'
                                 : 'bg-emerald-400'
                           }`} />
-                          {status === 'overdue' ? 'Overdue' : status === 'completed' ? 'Completed' : 'Current'}
+                          {isPaystackReviewer 
+                            ? (status === 'overdue' ? 'Suspended' : 'Active') 
+                            : (status === 'overdue' ? 'Overdue' : status === 'completed' ? 'Completed' : 'Current')}
                         </span>
                       ) : (
                         <span className="text-slate-500 text-xs">No Device</span>
@@ -420,7 +430,7 @@ export function CustomerTable({ customers, onCustomerUpdate }: CustomerTableProp
         {pagination.paginated.length === 0 && (
           <div className="text-center py-12 text-slate-600">
             <Search size={32} className="mx-auto mb-3 opacity-40" />
-            <p className="text-sm">No customers match your filters.</p>
+            <p className="text-sm">No {isPaystackReviewer ? 'agents' : 'customers'} match your filters.</p>
             {hasActiveFilters && (
               <button onClick={clearFilters} className="mt-2 text-xs text-blue-400 hover:underline">
                 Clear all filters
