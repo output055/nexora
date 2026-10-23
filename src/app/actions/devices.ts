@@ -16,12 +16,14 @@ import {
 } from '@/lib/manageengine';
 import { getAllSystemSettings } from './settings';
 import { logAudit } from '@/lib/audit';
+import { requirePermission } from '@/lib/auth-guard';
 
 /**
  * Get all devices (general list)
  */
 export async function getDevicesAction() {
   try {
+    await requirePermission('manage_devices');
     const data = await fetchManageEngineDevices();
     return { success: true, data };
   } catch (error: any) {
@@ -34,6 +36,7 @@ export async function getDevicesAction() {
  */
 export async function getDeviceDetailsAction(deviceId: string) {
   try {
+    await requirePermission('manage_devices');
     const data = await getDeviceDetails(deviceId);
     return { success: true, data };
   } catch (error: any) {
@@ -46,6 +49,7 @@ export async function getDeviceDetailsAction(deviceId: string) {
  */
 export async function getAllDeviceLocationsAction() {
   try {
+    await requirePermission('manage_devices');
     const data = await getAllDeviceLocations();
     return { success: true, data };
   } catch (error: any) {
@@ -58,6 +62,7 @@ export async function getAllDeviceLocationsAction() {
  */
 export async function getDeviceLocationAction(deviceId: string) {
   try {
+    await requirePermission('manage_devices');
     const data = await getDeviceLocationWithAddress(deviceId);
     return { success: true, data };
   } catch (error: any) {
@@ -70,6 +75,7 @@ export async function getDeviceLocationAction(deviceId: string) {
  */
 export async function getDeviceAppsAction(deviceId: string) {
   try {
+    await requirePermission('manage_devices');
     const data = await getDeviceApps(deviceId);
     return { success: true, data };
   } catch (error: any) {
@@ -82,6 +88,7 @@ export async function getDeviceAppsAction(deviceId: string) {
  */
 export async function associateDeviceAppAction(deviceId: string, appIds: string[]) {
   try {
+    await requirePermission('manage_devices');
     const data = await associateDeviceApps(deviceId, appIds);
     return { success: true, data };
   } catch (error: any) {
@@ -94,6 +101,7 @@ export async function associateDeviceAppAction(deviceId: string, appIds: string[
  */
 export async function requestDeviceLocationUpdateAction(deviceId: string) {
   try {
+    await requirePermission('manage_devices');
     const data = await requestDeviceLocationUpdate(deviceId);
     return { success: true, data };
   } catch (error: any) {
@@ -106,6 +114,7 @@ export async function requestDeviceLocationUpdateAction(deviceId: string) {
  */
 export async function getDeviceSecurityAction(deviceId: string) {
   try {
+    await requirePermission('manage_devices');
     // Run them in parallel
     const [restrictions, certificates, filevault] = await Promise.all([
       getDeviceRestrictions(deviceId).catch(e => ({ error: e.message })),
@@ -131,6 +140,7 @@ export async function getDeviceSecurityAction(deviceId: string) {
  */
 export async function getDeviceAlertsAction(deviceId: string) {
   try {
+    await requirePermission('manage_devices');
     const data = await getDeviceAlerts(deviceId);
     return { success: true, data };
   } catch (error: any) {
@@ -143,6 +153,8 @@ export async function getDeviceAlertsAction(deviceId: string) {
  */
 export async function executeDeviceCommandAction(deviceId: string, commandName: string, commandData: any = {}) {
   try {
+    const authCtx = await requirePermission('manage_devices');
+
     let payload = { ...commandData };
 
     // Auto-inject settings for Lost Mode / Kiosk Mode if missing
@@ -164,7 +176,7 @@ export async function executeDeviceCommandAction(deviceId: string, commandName: 
     }
 
     const data = await sendDeviceCommand(deviceId, commandName, payload);
-    await logAudit(`Executed manual MDM command: ${commandName} on device MDM ID: ${deviceId}`);
+    await logAudit(`Executed manual MDM command: ${commandName} on device MDM ID: ${deviceId} by ${authCtx.user.email}`);
     return { success: true, data };
   } catch (error: any) {
     console.error(`Action error sending command ${commandName}:`, error);

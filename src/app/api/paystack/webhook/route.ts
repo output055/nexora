@@ -14,9 +14,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify signature
+    // Verify signature timing-safely
     const hash = crypto.createHmac('sha512', secret).update(rawBody).digest('hex');
-    if (hash !== signature) {
+    const hashBuf = Buffer.from(hash);
+    const sigBuf = Buffer.from(signature);
+
+    if (hashBuf.length !== sigBuf.length || !crypto.timingSafeEqual(hashBuf, sigBuf)) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
@@ -33,6 +36,20 @@ export async function POST(request: Request) {
 
       const amountPaidGhs = amount / 100;
       const supabase = createServiceRoleSupabaseClient();
+
+      // Check for duplicate webhook processing (idempotency check)
+      if (reference) {
+        const { data: existingPayment } = await supabase
+          .from('payments')
+          .select('id')
+          .eq('transaction_reference', reference)
+          .maybeSingle();
+
+        if (existingPayment) {
+          console.log(`Webhook: Payment reference ${reference} already processed. Skipping duplicate.`);
+          return NextResponse.json({ status: 'success', duplicate: true });
+        }
+      }
 
       // 1. Fetch Device to check if it's overdue
       let deviceBeforePayment = null;

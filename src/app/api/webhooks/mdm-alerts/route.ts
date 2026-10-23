@@ -1,13 +1,24 @@
 import { NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase';
+import { createServiceRoleSupabaseClient } from '@/lib/supabase';
+import crypto from 'crypto';
 
 export async function POST(req: Request) {
   try {
+    const webhookSecret = process.env.MDM_WEBHOOK_SECRET || process.env.CRON_SECRET;
+    const providedSecret = req.headers.get('x-mdm-secret') || req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+
+    if (!webhookSecret || !providedSecret) {
+      return NextResponse.json({ error: 'Unauthorized - missing webhook authentication secret' }, { status: 401 });
+    }
+
+    const expectedBuffer = Buffer.from(webhookSecret);
+    const providedBuffer = Buffer.from(providedSecret);
+
+    if (expectedBuffer.length !== providedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, providedBuffer)) {
+      return NextResponse.json({ error: 'Unauthorized - invalid webhook secret' }, { status: 401 });
+    }
+
     const payload = await req.json();
-    
-    // ManageEngine MDM alert webhooks payload format may vary,
-    // so we attempt to extract common fields or fallback to parsing the raw body
-    // Typically, you might map these based on actual documentation or test payloads.
     
     const deviceId = payload.device_id || payload.deviceID || payload.mdm_device_id;
     const alertName = payload.alert_name || payload.title || payload.event_name || 'MDM Alert';
@@ -18,16 +29,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing device_id in payload' }, { status: 400 });
     }
 
-    const supabase = await createServerSupabaseClient();
+    // Sanitize string lengths to prevent storage abuse
+    const safeDeviceId = String(deviceId).slice(0, 100);
+    const safeAlertName = String(alertName).slice(0, 200);
+    const safeSeverity = String(severity).slice(0, 50);
+    const safeDescription = String(description).slice(0, 4000);
 
-    // Insert the alert into our new device_alerts table
+    const supabase = createServiceRoleSupabaseClient();
+
+    // Insert the alert into device_alerts table
     const { error } = await supabase
       .from('device_alerts')
       .insert({
-        device_id: deviceId,
-        alert_name: alertName,
-        severity: severity,
-        description: description,
+        device_id: safeDeviceId,
+        alert_name: safeAlertName,
+        severity: safeSeverity,
+        description: safeDescription,
       });
 
     if (error) {

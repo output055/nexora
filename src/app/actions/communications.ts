@@ -1,6 +1,7 @@
 'use server';
 
-import { createServerSupabaseClient } from '@/lib/supabase';
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/lib/supabase';
+import { requireAuth, requireRole } from '@/lib/auth-guard';
 
 // Log an SMS directly
 export async function logSms(data: {
@@ -11,38 +12,47 @@ export async function logSms(data: {
   provider_response?: any;
   cost?: number;
 }) {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const authCtx = await requireRole(['superadmin', 'admin', 'field_agent', 'shop_manager']);
+    const supabase = await createServerSupabaseClient();
 
-  const { error } = await supabase
-    .from('sms_logs')
-    .insert({
-      ...data,
-      sent_by: user?.id || null,
-    });
+    const { error } = await supabase
+      .from('sms_logs')
+      .insert({
+        ...data,
+        sent_by: authCtx.user.id,
+      });
 
-  if (error) {
-    console.error('Failed to log SMS:', error);
-    return { success: false, error: error.message };
+    if (error) {
+      console.error('Failed to log SMS:', error);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
-  return { success: true };
 }
 
 // Fetch SMS logs
 export async function getSmsLogs() {
-  const supabase = await createServerSupabaseClient();
-  
-  const { data, error } = await supabase
-    .from('sms_logs')
-    .select('*, customer:customers(full_name)')
-    .order('sent_at', { ascending: false })
-    .limit(500);
+  try {
+    await requireRole(['superadmin', 'admin']);
+    const supabase = await createServerSupabaseClient();
+    
+    const { data, error } = await supabase
+      .from('sms_logs')
+      .select('*, customer:customers(full_name)')
+      .order('sent_at', { ascending: false })
+      .limit(500);
 
-  if (error) {
-    console.error('Failed to get SMS logs:', error);
-    return { success: false, error: error.message };
+    if (error) {
+      console.error('Failed to get SMS logs:', error);
+      return { success: false, error: error.message };
+    }
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
-  return { success: true, data };
 }
 
 // Create a Notification
@@ -53,54 +63,64 @@ export async function createNotification(data: {
   type?: 'info' | 'success' | 'warning' | 'error';
   link?: string | null;
 }) {
-  // We use service role to bypass RLS for creating system notifications if it's not the user creating it
-  const { createServiceRoleSupabaseClient } = await import('@/lib/supabase');
-  const supabase = createServiceRoleSupabaseClient();
+  try {
+    await requireRole(['superadmin', 'admin']);
+    const supabase = createServiceRoleSupabaseClient();
 
-  const { error } = await supabase
-    .from('notifications')
-    .insert(data);
+    const { error } = await supabase
+      .from('notifications')
+      .insert(data);
 
-  if (error) {
-    console.error('Failed to create notification:', error);
-    return { success: false, error: error.message };
+    if (error) {
+      console.error('Failed to create notification:', error);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
-  return { success: true };
 }
 
 // Mark a notification as read
 export async function markNotificationRead(id: string) {
-  const supabase = await createServerSupabaseClient();
+  try {
+    const authCtx = await requireAuth();
+    const supabase = await createServerSupabaseClient();
 
-  const { error } = await supabase
-    .from('notifications')
-    .update({ is_read: true })
-    .eq('id', id);
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('id', id)
+      .or(`user_id.eq.${authCtx.user.id},user_id.is.null`);
 
-  if (error) {
-    console.error('Failed to mark notification as read:', error);
-    return { success: false, error: error.message };
+    if (error) {
+      console.error('Failed to mark notification as read:', error);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
-  return { success: true };
 }
 
 // Mark all notifications as read for current user
 export async function markAllNotificationsRead() {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const authCtx = await requireAuth();
+    const supabase = await createServerSupabaseClient();
 
-  if (!user) return { success: false, error: 'Unauthorized' };
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .or(`user_id.eq.${authCtx.user.id},user_id.is.null`)
+      .eq('is_read', false);
 
-  // Update logic needs to handle `user_id IS NULL` for global notifications
-  const { error } = await supabase
-    .from('notifications')
-    .update({ is_read: true })
-    .or(`user_id.eq.${user.id},user_id.is.null`)
-    .eq('is_read', false);
-
-  if (error) {
-    console.error('Failed to mark all notifications as read:', error);
-    return { success: false, error: error.message };
+    if (error) {
+      console.error('Failed to mark all notifications as read:', error);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
-  return { success: true };
 }

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { sendDeviceCommand } from '@/lib/manageengine';
 import { getSystemSetting } from './settings';
 import { sendSMS, sendTriggerSMS } from '@/lib/sms';
+import { requirePermission, requireRole } from '@/lib/auth-guard';
 
 export interface LogPaymentInput {
   customerId: string;
@@ -17,13 +18,9 @@ export interface LogPaymentInput {
 
 export async function logPayment(input: LogPaymentInput): Promise<{ success: boolean; error?: string }> {
   try {
+    const authCtx = await requirePermission('log_payment');
+    const user = authCtx.user;
     const supabase = await createServerSupabaseClient();
-
-    // 1. Check Auth
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return { success: false, error: 'Unauthorized' };
-    }
 
     // 2. Fetch Device (to check if it was overdue)
     let deviceBeforePayment = null;
@@ -169,13 +166,9 @@ export async function logPayment(input: LogPaymentInput): Promise<{ success: boo
 
 export async function reversePayment(paymentId: string): Promise<{ success: boolean; error?: string }> {
   try {
+    const authCtx = await requireRole(['superadmin', 'admin']);
+    const user = authCtx.user;
     const supabase = await createServerSupabaseClient();
-
-    // 1. Check Auth
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return { success: false, error: 'Unauthorized' };
-    }
 
     // 2. Fetch Payment
     const { data: payment, error: paymentError } = await supabase

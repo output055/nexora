@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# scratch, test, and debug scripts (prevent accidental credential leaks)
+test-*.js
+test-*.ts
+check-*.js
+scratch-*.ts
+seed-data.js
+generate_zoho_token.js
+output.json
+device_data_sample.json
+api.html

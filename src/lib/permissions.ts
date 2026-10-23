@@ -38,6 +38,23 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
   }
 }
 
+export async function getUserRoles(userId: string): Promise<string[]> {
+  try {
+    const supabase = createServiceRoleSupabaseClient();
+    const { data, error } = await supabase
+      .from('user_roles')
+      .select('role:roles(name)')
+      .eq('user_id', userId);
+
+    if (error || !data) return [];
+    return data
+      .map((ur: any) => ur.role?.name?.toLowerCase())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Boolean guard — checks if a user has a specific permission slug.
  * Use in API route handlers before executing privileged operations.
@@ -48,4 +65,16 @@ export async function hasPermission(
 ): Promise<boolean> {
   const permissions = await getUserPermissions(userId);
   return permissions.includes(permission);
+}
+
+/**
+ * Boolean guard — checks if a user has any of the specified roles.
+ */
+export async function hasRole(
+  userId: string,
+  roleNames: string | string[]
+): Promise<boolean> {
+  const roles = await getUserRoles(userId);
+  const targetRoles = (Array.isArray(roleNames) ? roleNames : [roleNames]).map(r => r.toLowerCase());
+  return roles.some(r => targetRoles.includes(r));
 }

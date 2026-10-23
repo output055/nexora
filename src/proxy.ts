@@ -11,8 +11,8 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  const isDashboard = pathname.startsWith('/dashboard');
-  const isAuthPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+  const isDashboard = pathname === '/dashboard' || pathname.startsWith('/dashboard/');
+  const isAuthPath = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
 
   if (!isDashboard && !isAuthPath) return response;
 
@@ -45,14 +45,13 @@ export async function proxy(request: NextRequest) {
     }
 
     if (isAuthPath && user) {
-      return NextResponse.redirect(new URL('/dashboard/admin', request.url));
+      return NextResponse.redirect(new URL('/dashboard', request.url));
     }
   }
-  // No Supabase configured — allow all access for local dev with mock data
 
   return response;
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/login', '/register', '/forgot-password'],
+  matcher: ['/dashboard', '/dashboard/:path*', '/login', '/register', '/forgot-password'],
 };

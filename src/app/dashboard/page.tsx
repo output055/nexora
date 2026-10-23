@@ -8,7 +8,7 @@ export default async function DashboardRoot() {
   const { data: { user }, error } = await supabase.auth.getUser();
 
   if (error || !user) {
-    redirect('/auth/login');
+    redirect('/login');
   }
 
   // Fetch the roles for the current user
@@ -17,11 +17,11 @@ export default async function DashboardRoot() {
     .select('roles(name)')
     .eq('user_id', user.id);
 
-  const roles = userRolesData?.map((ur: any) => ur.roles?.name) || [];
+  const roles = userRolesData?.map((ur: any) => ur.roles?.name?.toLowerCase()) || [];
 
-  if (roles.includes('admin')) {
+  if (roles.includes('superadmin') || roles.includes('admin')) {
     redirect('/dashboard/admin');
-  } else if (roles.includes('field_agent')) {
+  } else if (roles.includes('field_agent') || roles.includes('shop_manager')) {
     redirect('/dashboard/agent');
   } else if (roles.includes('customer')) {
     redirect('/dashboard/customer');

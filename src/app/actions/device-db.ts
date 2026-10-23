@@ -4,9 +4,11 @@ import { createServiceRoleSupabaseClient } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import type { Device } from '@/types';
 import { logAudit } from '@/lib/audit';
+import { requirePermission } from '@/lib/auth-guard';
 
 export async function updateDeviceAction(id: string, updates: Partial<Device>) {
   try {
+    const authCtx = await requirePermission('manage_devices');
     const supabase = createServiceRoleSupabaseClient();
     
     const safeUpdates = { ...updates };
@@ -25,7 +27,7 @@ export async function updateDeviceAction(id: string, updates: Partial<Device>) {
     
     revalidatePath('/dashboard/admin/devices');
     revalidatePath(`/dashboard/admin/customers/${updates.customer_id || ''}`);
-    await logAudit(`Updated device details for ID: ${id}`);
+    await logAudit(`Updated device details for ID: ${id} by ${authCtx.user.email}`);
     return { success: true, data };
   } catch (error: any) {
     console.error('Failed to update device:', error);
@@ -35,6 +37,7 @@ export async function updateDeviceAction(id: string, updates: Partial<Device>) {
 
 export async function deleteDeviceAction(id: string) {
   try {
+    const authCtx = await requirePermission('manage_devices');
     const supabase = createServiceRoleSupabaseClient();
     
     const { error } = await supabase
@@ -51,7 +54,7 @@ export async function deleteDeviceAction(id: string) {
     
     revalidatePath('/dashboard/admin/devices');
     revalidatePath('/dashboard/admin/customers');
-    await logAudit(`Deleted device with ID: ${id}`);
+    await logAudit(`Deleted device with ID: ${id} by ${authCtx.user.email}`);
     return { success: true };
   } catch (error: any) {
     console.error('Failed to delete device:', error);

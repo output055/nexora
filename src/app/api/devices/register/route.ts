@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/lib/supabase';
 import { hasPermission } from '@/lib/permissions';
 import { calculatePaymentPlan, calculateNextPaymentDate } from '@/lib/utils/calculator';
@@ -179,8 +180,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: uploadError.message }, { status: 500 });
     }
 
-    // Generate random 6-character password
-    const rawPassword = Math.random().toString(36).slice(-6).toUpperCase();
+    // Generate cryptographically secure random password (8-character alphanumeric)
+    const rawPassword = crypto.randomBytes(4).toString('hex').toUpperCase();
     
     // Auto-create Auth User
     const { data: authUser, error: createUserError } = await admin.auth.admin.createUser({

@@ -4,9 +4,12 @@ import { sendSMS, sendTriggerSMS } from '@/lib/sms';
 
 export async function GET(request: Request) {
   // Simple auth check to ensure only authorized callers (like Vercel Cron) can hit this (skip in local development)
+  const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get('authorization');
-  if (process.env.NODE_ENV !== 'development' && process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new NextResponse('Unauthorized', { status: 401 });
+  if (process.env.NODE_ENV !== 'development') {
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
   }
 
   try {

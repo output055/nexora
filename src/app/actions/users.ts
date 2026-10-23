@@ -2,8 +2,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
-import { createServerSupabaseClient } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
+import { requireAuth } from '@/lib/auth-guard';
 
 type ActionError = {
   message: string;
@@ -47,21 +47,20 @@ const getAdminClient = () => {
   });
 };
 
-import { hasPermission } from '@/lib/permissions';
+async function checkUserManagementAuth() {
+  const authCtx = await requireAuth();
+  if (authCtx.isSuperAdmin) return authCtx;
 
-async function checkManageUsersAccess() {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error('Unauthorized');
-  
-  const hasAccess = await hasPermission(user.id, 'manage_users');
-  if (!hasAccess) throw new Error('Permission denied: Requires manage_users');
-  
-  return user;
+  const hasAccess = authCtx.permissions.includes('manage_roles') || authCtx.permissions.includes('manage_users') || authCtx.isAdmin;
+  if (!hasAccess) {
+    throw new Error('Permission denied: Requires manage_roles or manage_users permission.');
+  }
+  return authCtx;
 }
 
 export async function fetchUsers() {
   try {
+    const authCtx = await checkUserManagementAuth();
     const supabase = getAdminClient();
     
     // 1. Fetch auth users via Admin API
@@ -87,20 +86,8 @@ export async function fetchUsers() {
       };
     });
 
-    // 4. Filter superadmin if current user is not a superadmin
-    try {
-      const clientSupabase = await createServerSupabaseClient();
-      const { data: { user } } = await clientSupabase.auth.getUser();
-      if (user) {
-        const currentUserRole = typedUserRoles.find(r => r.user_id === user.id);
-        const roleName = getJoinedRole(currentUserRole?.roles ?? null)?.name?.toLowerCase();
-        
-        if (roleName !== 'superadmin') {
-          users = users.filter(u => u.role?.name?.toLowerCase() !== 'superadmin');
-        }
-      }
-    } catch (e) {
-      // If error fetching current user, default to hiding superadmins for safety
+    // 4. Filter out superadmin accounts if caller is not superadmin
+    if (!authCtx.isSuperAdmin) {
       users = users.filter(u => u.role?.name?.toLowerCase() !== 'superadmin');
     }
 
@@ -112,8 +99,20 @@ export async function fetchUsers() {
 
 export async function createUser(email: string, password: string, roleId: string) {
   try {
-    await checkManageUsersAccess();
+    const authCtx = await checkUserManagementAuth();
     const supabase = getAdminClient();
+
+    // Verify if the requested role is superadmin
+    const { data: targetRole, error: fetchRoleErr } = await supabase
+      .from('roles')
+      .select('id, name')
+      .eq('id', roleId)
+      .single();
+    if (fetchRoleErr || !targetRole) throw new Error('Invalid role specified');
+
+    if (targetRole.name.toLowerCase() === 'superadmin' && !authCtx.isSuperAdmin) {
+      throw new Error('Forbidden. Only a Superadmin can create another Superadmin account.');
+    }
     
     // 1. Create User in Auth
     const { data, error } = await supabase.auth.admin.createUser({
@@ -137,7 +136,7 @@ export async function createUser(email: string, password: string, roleId: string
     }
 
     revalidatePath('/dashboard/admin/users');
-    await logAudit(`Created new admin user: ${email}`);
+    await logAudit(`Created new admin user: ${email} with role: ${targetRole.name} by ${authCtx.user.email}`);
     return { success: true, user: data.user };
   } catch (error: unknown) {
     return { success: false, error: getErrorMessage(error) };
@@ -146,12 +145,25 @@ export async function createUser(email: string, password: string, roleId: string
 
 export async function updateUser(userId: string, updates: { password?: string }) {
   try {
-    await checkManageUsersAccess();
+    const authCtx = await checkUserManagementAuth();
     const supabase = getAdminClient();
+
+    // Check target user's role: only superadmin can modify another superadmin's credentials
+    const { data: userRole } = await supabase
+      .from('user_roles')
+      .select('roles(name)')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const targetIsSuperadmin = (userRole?.roles as any)?.name?.toLowerCase() === 'superadmin';
+    if (targetIsSuperadmin && !authCtx.isSuperAdmin) {
+      throw new Error('Forbidden. Only a Superadmin can modify a Superadmin account.');
+    }
+
     const { error } = await supabase.auth.admin.updateUserById(userId, updates);
     if (error) throw error;
     
-    await logAudit(`Updated user: ${userId}`);
+    await logAudit(`Updated user credentials for: ${userId} by ${authCtx.user.email}`);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: getErrorMessage(error) };
@@ -160,8 +172,32 @@ export async function updateUser(userId: string, updates: { password?: string })
 
 export async function updateUserRole(userId: string, roleId: string) {
   try {
-    await checkManageUsersAccess();
+    const authCtx = await checkUserManagementAuth();
     const supabase = getAdminClient();
+
+    // Target user's current role
+    const { data: currentRoleData } = await supabase
+      .from('user_roles')
+      .select('roles(name)')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const currentRoleName = (currentRoleData?.roles as any)?.name?.toLowerCase();
+    if (currentRoleName === 'superadmin' && !authCtx.isSuperAdmin) {
+      throw new Error('Forbidden. Only a Superadmin can modify a Superadmin user role.');
+    }
+
+    // Role being assigned
+    if (roleId) {
+      const { data: newRole } = await supabase
+        .from('roles')
+        .select('name')
+        .eq('id', roleId)
+        .single();
+      if (newRole?.name?.toLowerCase() === 'superadmin' && !authCtx.isSuperAdmin) {
+        throw new Error('Forbidden. Only a Superadmin can assign the Superadmin role.');
+      }
+    }
     
     // Delete any existing roles for this user
     const { error: deleteError } = await supabase.from('user_roles').delete().eq('user_id', userId);
@@ -174,7 +210,7 @@ export async function updateUserRole(userId: string, roleId: string) {
     }
 
     revalidatePath('/dashboard/admin/users');
-    await logAudit(`Updated role for user: ${userId}`);
+    await logAudit(`Updated role for user: ${userId} to roleId: ${roleId} by ${authCtx.user.email}`);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: getErrorMessage(error) };
@@ -183,13 +219,31 @@ export async function updateUserRole(userId: string, roleId: string) {
 
 export async function deleteUser(userId: string) {
   try {
-    await checkManageUsersAccess();
+    const authCtx = await checkUserManagementAuth();
+
+    if (authCtx.user.id === userId) {
+      throw new Error('Cannot delete your own active administrator account.');
+    }
+
     const supabase = getAdminClient();
+
+    // Check if target is a superadmin
+    const { data: userRole } = await supabase
+      .from('user_roles')
+      .select('roles(name)')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const targetIsSuperadmin = (userRole?.roles as any)?.name?.toLowerCase() === 'superadmin';
+    if (targetIsSuperadmin && !authCtx.isSuperAdmin) {
+      throw new Error('Forbidden. Only a Superadmin can delete a Superadmin account.');
+    }
+
     const { error } = await supabase.auth.admin.deleteUser(userId);
     if (error) throw error;
 
     revalidatePath('/dashboard/admin/users');
-    await logAudit(`Deleted user: ${userId}`);
+    await logAudit(`Deleted user: ${userId} by ${authCtx.user.email}`);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: getErrorMessage(error) };

@@ -1,26 +1,29 @@
-import { fetchManageEngineDevices, getDeviceLocationWithAddress } from '@/lib/manageengine';
+import { fetchManageEngineDevices } from '@/lib/manageengine';
 import { NextResponse } from 'next/server';
+import { createServerSupabaseClient } from '@/lib/supabase';
+import { hasPermission } from '@/lib/permissions';
 
 export async function GET(request: Request) {
+  // Disable in production to prevent information leakage
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Endpoint disabled in production.' }, { status: 404 });
+  }
+
   try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const permitted = await hasPermission(user.id, 'manage_devices');
+    if (!permitted) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const devicesData = await fetchManageEngineDevices();
     const firstDevice = devicesData?.devices?.[0];
-    
-    let deviceDetails = null;
-    let networkInfo = null;
-    
-    // Attempt to fetch detailed device info for the first device
-    if (firstDevice?.device_id) {
-      try {
-        const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
-        
-        // We will try to fetch using fetchManageEngineDevices style but for a specific device
-        // Since we don't have getDeviceDetails exposed, we can't easily fetch it without the token logic
-        // But let's just return the list data first to see what properties are there.
-      } catch (e) {
-        // ignore
-      }
-    }
 
     return NextResponse.json({
       success: true,

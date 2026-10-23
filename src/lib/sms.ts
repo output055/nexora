@@ -1,4 +1,4 @@
-import { getSystemSetting } from '@/app/actions/settings';
+import { getInternalSystemSetting } from '@/app/actions/settings';
 import { createServiceRoleSupabaseClient } from '@/lib/supabase';
 
 /**
@@ -28,8 +28,8 @@ export async function sendSMS(to: string, message: string, customerId?: string):
   let providerResponse: any = null;
 
   try {
-    const apiKey = await getSystemSetting('sms_api_key');
-    const senderId = await getSystemSetting('sms_sender_id') || 'CREDIFON';
+    const apiKey = await getInternalSystemSetting('sms_api_key');
+    const senderId = await getInternalSystemSetting('sms_sender_id') || 'CREDIFON';
 
     if (!apiKey) {
       console.warn('SMS API Key is not configured. Skipping SMS sending.');

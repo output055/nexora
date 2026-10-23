@@ -14,12 +14,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       if (!user) {
         router.replace('/login');
       } else {
-        const hasAdminAccess = user.roles.some((r) => 
-          ['superadmin', 'admin', 'field_agent', 'paystack_reviewer'].includes(r.name)
+        const isSuperAdminOrAdmin = user.roles.some((r) => 
+          ['superadmin', 'admin', 'paystack_reviewer'].includes(r.name?.toLowerCase())
         );
         
-        if (!hasAdminAccess) {
-          router.replace('/dashboard/customer');
+        if (!isSuperAdminOrAdmin) {
+          const isAgent = user.roles.some((r) => 
+            ['field_agent', 'shop_manager'].includes(r.name?.toLowerCase())
+          );
+          if (isAgent) {
+            router.replace('/dashboard/agent');
+          } else {
+            router.replace('/dashboard/customer');
+          }
         }
       }
     }
@@ -36,7 +43,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // Prevent flash of content if user doesn't have access
   const hasAdminAccess = user.roles.some((r) => 
-    ['superadmin', 'admin', 'field_agent', 'paystack_reviewer'].includes(r.name)
+    ['superadmin', 'admin', 'paystack_reviewer'].includes(r.name?.toLowerCase())
   );
   
   if (!hasAdminAccess) return null;

@@ -2,24 +2,28 @@
 
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/lib/supabase';
 import { sendSMS } from '@/lib/sms';
+import { requirePermission, requireRole } from '@/lib/auth-guard';
+import { logAudit } from '@/lib/audit';
 
 export async function getCustomersForSelect() {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    await requirePermission('view_customers');
+    const supabase = await createServerSupabaseClient();
 
-  if (!user) return { success: false, error: 'Unauthorized' };
+    const { data, error } = await supabase
+      .from('customers')
+      .select('id, full_name, phone:phone_number')
+      .order('full_name');
 
-  const { data, error } = await supabase
-    .from('customers')
-    .select('id, full_name, phone:phone_number')
-    .order('full_name');
+    if (error) {
+      console.error('Failed to fetch customers:', error);
+      return { success: false, error: error.message };
+    }
 
-  if (error) {
-    console.error('Failed to fetch customers:', error);
-    return { success: false, error: error.message };
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
-
-  return { success: true, data };
 }
 
 export async function sendBroadcastSMS(
@@ -27,61 +31,58 @@ export async function sendBroadcastSMS(
   message: string,
   customerId?: string
 ) {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const authCtx = await requireRole(['superadmin', 'admin']);
+    const supabase = await createServerSupabaseClient();
 
-  if (!user) return { success: false, error: 'Unauthorized' };
+    let query = supabase.from('customers').select('id, user_id, full_name, phone:phone_number');
 
-  let query = supabase.from('customers').select('id, user_id, full_name, phone:phone_number');
-
-  if (targetGroup === 'individual' && customerId) {
-    query = query.eq('id', customerId);
-  } else if (targetGroup === 'overdue') {
-    // Basic logic for overdue (has a status of overdue or similar)
-    // For now we'll assume we filter by status
-    query = query.eq('status', 'overdue');
-  } else if (targetGroup === 'locked') {
-    query = query.eq('status', 'locked');
-  }
-  // 'all' means no filter
-
-  const { data: customers, error } = await query;
-
-  if (error) {
-    console.error('Failed to fetch target customers:', error);
-    return { success: false, error: error.message };
-  }
-
-  if (!customers || customers.length === 0) {
-    return { success: false, error: 'No customers found for this target group.' };
-  }
-
-  let sentCount = 0;
-  for (const customer of customers) {
-    // Simple template replacement
-    const personalizedMessage = message
-      .replace(/{customer_name}/g, customer.full_name)
-      .replace(/{amount_due}/g, '0'); // Assuming 0 for now, could fetch from payments
-
-    // Use our sendSMS utility which already logs to sms_logs table!
-    const result = await sendSMS(customer.phone, personalizedMessage, customer.id);
-    if (result) {
-      sentCount++;
+    if (targetGroup === 'individual' && customerId) {
+      query = query.eq('id', customerId);
+    } else if (targetGroup === 'overdue') {
+      query = query.eq('status', 'overdue');
+    } else if (targetGroup === 'locked') {
+      query = query.eq('status', 'locked');
     }
 
-    // Insert in-app notification
-    if (customer.user_id) {
-      const adminClient = createServiceRoleSupabaseClient();
-      const { error: notifError } = await adminClient.from('notifications').insert({
-        user_id: customer.user_id,
-        title: 'New Broadcast Message',
-        message: personalizedMessage,
-        type: 'info',
-        is_read: false
-      });
-      if (notifError) console.error("Notification Insert Error:", notifError);
-    }
-  }
+    const { data: customers, error } = await query;
 
-  return { success: true, count: sentCount, total: customers.length };
+    if (error) {
+      console.error('Failed to fetch target customers:', error);
+      return { success: false, error: error.message };
+    }
+
+    if (!customers || customers.length === 0) {
+      return { success: false, error: 'No customers found for this target group.' };
+    }
+
+    let sentCount = 0;
+    for (const customer of customers) {
+      const personalizedMessage = message
+        .replace(/{customer_name}/g, customer.full_name)
+        .replace(/{amount_due}/g, '0');
+
+      const result = await sendSMS(customer.phone, personalizedMessage, customer.id);
+      if (result) {
+        sentCount++;
+      }
+
+      if (customer.user_id) {
+        const adminClient = createServiceRoleSupabaseClient();
+        const { error: notifError } = await adminClient.from('notifications').insert({
+          user_id: customer.user_id,
+          title: 'New Broadcast Message',
+          message: personalizedMessage,
+          type: 'info',
+          is_read: false
+        });
+        if (notifError) console.error("Notification Insert Error:", notifError);
+      }
+    }
+
+    await logAudit(`Sent broadcast SMS to ${sentCount} recipients (target: ${targetGroup}) by ${authCtx.user.email}`);
+    return { success: true, count: sentCount, total: customers.length };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 }

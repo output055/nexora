@@ -1,25 +1,30 @@
 'use server';
 
-import { createServiceRoleSupabaseClient, createServerSupabaseClient } from '@/lib/supabase';
+import { createServiceRoleSupabaseClient } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import type { Customer } from '@/types';
 import { logAudit } from '@/lib/audit';
-import { hasPermission } from '@/lib/permissions';
-
-async function checkAccess(permission: string) {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error('Unauthorized');
-  
-  const hasAccess = await hasPermission(user.id, permission);
-  if (!hasAccess) throw new Error(`Permission denied: Requires ${permission}`);
-  
-  return user;
-}
+import { requireAuth } from '@/lib/auth-guard';
 
 export async function getSignedScanUrl(path: string) {
   try {
-    await checkAccess('view_customers');
+    const authCtx = await requireAuth();
+
+    // If caller is not staff / doesn't have view_customers, verify that this scan belongs to them
+    const canViewAll = authCtx.isStaff || authCtx.permissions.includes('view_customers') || authCtx.permissions.includes('manage_customers');
+    if (!canViewAll) {
+      const supabase = createServiceRoleSupabaseClient();
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('ghana_card_scan_path')
+        .eq('user_id', authCtx.user.id)
+        .maybeSingle();
+
+      if (!customer || customer.ghana_card_scan_path !== path) {
+        throw new Error('Forbidden. You can only view your own identification documents.');
+      }
+    }
+
     const supabase = createServiceRoleSupabaseClient();
     const { data, error } = await supabase.storage
       .from('ghana-card-scans')
@@ -35,10 +40,8 @@ export async function getSignedScanUrl(path: string) {
 
 export async function uploadScan(fileName: string, formData: FormData) {
   try {
-    // Basic auth check for onboarding
-    const supabaseUser = await createServerSupabaseClient();
-    const { data: { user } } = await supabaseUser.auth.getUser();
-    if (!user) throw new Error('Unauthorized');
+    // Basic auth check for onboarding / customer management
+    await requireAuth();
 
     const file = formData.get('file') as File;
     if (!file) throw new Error('No file provided');
@@ -61,7 +64,12 @@ export async function uploadScan(fileName: string, formData: FormData) {
 
 export async function updateCustomerAction(id: string, updates: Partial<Customer>) {
   try {
-    await checkAccess('edit_customer');
+    const authCtx = await requireAuth();
+    const hasEditAccess = authCtx.isSuperAdmin || authCtx.permissions.includes('edit_customer') || authCtx.permissions.includes('manage_customers') || authCtx.isAdmin;
+    if (!hasEditAccess) {
+      throw new Error('Permission denied: Requires edit_customer permission.');
+    }
+
     const supabase = createServiceRoleSupabaseClient();
     
     // Make sure we don't accidentally update id or created_at
@@ -79,7 +87,7 @@ export async function updateCustomerAction(id: string, updates: Partial<Customer
 
     if (error) throw new Error(error.message);
     
-    await logAudit(`Updated customer information for ID: ${id}`);
+    await logAudit(`Updated customer information for ID: ${id} by ${authCtx.user.email}`);
     return { success: true, data };
   } catch (error: any) {
     console.error('Failed to update customer:', error);
@@ -89,7 +97,12 @@ export async function updateCustomerAction(id: string, updates: Partial<Customer
 
 export async function deleteCustomerAction(id: string) {
   try {
-    await checkAccess('delete_customer');
+    const authCtx = await requireAuth();
+    const hasDeleteAccess = authCtx.isSuperAdmin || authCtx.permissions.includes('delete_customer') || authCtx.permissions.includes('manage_customers') || authCtx.isAdmin;
+    if (!hasDeleteAccess) {
+      throw new Error('Permission denied: Requires delete_customer permission.');
+    }
+
     const supabase = createServiceRoleSupabaseClient();
     
     const { error } = await supabase
@@ -105,7 +118,7 @@ export async function deleteCustomerAction(id: string) {
       throw new Error(error.message);
     }
     
-    await logAudit(`Deleted customer with ID: ${id}`);
+    await logAudit(`Deleted customer with ID: ${id} by ${authCtx.user.email}`);
     return { success: true };
   } catch (error: any) {
     console.error('Failed to delete customer:', error);

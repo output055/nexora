@@ -1,12 +1,25 @@
 import { NextResponse } from 'next/server';
+import { createServerSupabaseClient } from '@/lib/supabase';
 
 export async function POST(request: Request) {
   try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized. Authentication required.' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { email, amount, metadata } = body;
 
+    const numAmount = Number(amount);
+    if (!Number.isFinite(numAmount) || numAmount <= 0) {
+      return NextResponse.json({ error: 'Valid payment amount is required' }, { status: 400 });
+    }
+
     // amount is expected in GHS (or local currency). Paystack expects kobo/pesewas (amount * 100).
-    const amountInPesewas = Math.round(amount * 100);
+    const amountInPesewas = Math.round(numAmount * 100);
 
     const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
     
@@ -21,10 +34,13 @@ export async function POST(request: Request) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        email,
+        email: email || user.email,
         amount: amountInPesewas,
         currency: 'GHS',
-        metadata, // We will pass deviceId and customerId here
+        metadata: {
+          ...metadata,
+          initiatedByUserId: user.id,
+        },
       }),
     });
 
