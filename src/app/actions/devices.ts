@@ -14,6 +14,8 @@ import {
   getDeviceAlerts,
   sendDeviceCommand
 } from '@/lib/manageengine';
+import { createServiceRoleSupabaseClient } from '@/lib/supabase';
+import { revalidatePath } from 'next/cache';
 import { getAllSystemSettings } from './settings';
 import { logAudit } from '@/lib/audit';
 import { requirePermission } from '@/lib/auth-guard';
@@ -21,10 +23,10 @@ import { requirePermission } from '@/lib/auth-guard';
 /**
  * Get all devices (general list)
  */
-export async function getDevicesAction() {
+export async function getDevicesAction(excludeRemoved = true) {
   try {
     await requirePermission('manage_devices');
-    const data = await fetchManageEngineDevices();
+    const data = await fetchManageEngineDevices({ excludeRemoved });
     return { success: true, data };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -181,5 +183,82 @@ export async function executeDeviceCommandAction(deviceId: string, commandName: 
   } catch (error: any) {
     console.error(`Action error sending command ${commandName}:`, error);
     return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Sync devices between ManageEngine MDM and Credifon.
+ * - Forces a fresh fetch of active devices from ManageEngine (excluding removed/unmanaged devices)
+ * - Fetches device locations
+ * - Syncs updated device specs (os_version, serial_number, imei) into Credifon's database for matching devices
+ * - Revalidates relevant dashboard paths
+ */
+export async function syncMdmDevicesAction() {
+  try {
+    const authCtx = await requirePermission('manage_devices');
+
+    // 1. Fetch fresh devices from ManageEngine with excludeRemoved=true and force token refresh
+    const [devicesData, locationsData] = await Promise.all([
+      fetchManageEngineDevices({ excludeRemoved: true, forceRefresh: true }),
+      getAllDeviceLocations().catch(() => ({ locations: [] }))
+    ]);
+
+    const mdmDevices = devicesData?.devices || [];
+    const mdmLocations = locationsData?.locations || [];
+
+    // 2. Sync active devices info with Credifon's Supabase database
+    const supabase = createServiceRoleSupabaseClient();
+    const { data: dbDevices, error: dbError } = await supabase
+      .from('devices')
+      .select('id, mdm_device_id, serial_number, os_version, imei');
+
+    if (!dbError && dbDevices && dbDevices.length > 0) {
+      const mdmMap = new Map<string, any>();
+      mdmDevices.forEach((d: any) => {
+        mdmMap.set(String(d.device_id), d);
+      });
+
+      for (const dev of dbDevices) {
+        const mdmDev = mdmMap.get(dev.mdm_device_id);
+        if (mdmDev) {
+          const updates: Record<string, any> = {};
+          if (mdmDev.os_version && mdmDev.os_version !== dev.os_version) {
+            updates.os_version = mdmDev.os_version;
+          }
+          if (mdmDev.serial_number && !dev.serial_number) {
+            updates.serial_number = mdmDev.serial_number;
+          }
+          if (mdmDev.imei && !dev.imei) {
+            updates.imei = mdmDev.imei;
+          }
+          if (Object.keys(updates).length > 0) {
+            updates.updated_at = new Date().toISOString();
+            await supabase.from('devices').update(updates).eq('id', dev.id);
+          }
+        }
+      }
+    }
+
+    revalidatePath('/dashboard/admin/mdm');
+    revalidatePath('/dashboard/admin/devices');
+    revalidatePath('/dashboard/admin/billing');
+
+    await logAudit(`Synced MDM devices with Credifon: ${mdmDevices.length} active devices retrieved by ${authCtx.user.email}`);
+
+    return {
+      success: true,
+      message: `Successfully synced ${mdmDevices.length} active devices from MDM.`,
+      data: {
+        devices: mdmDevices,
+        locations: mdmLocations,
+        total: mdmDevices.length
+      }
+    };
+  } catch (error: any) {
+    console.error('Error syncing MDM devices:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to sync devices from MDM.'
+    };
   }
 }

@@ -2,20 +2,23 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Smartphone, ShieldCheck, Cpu, Hash, Clock, ChevronRight, User, Filter, X, ChevronUp, ChevronDown } from 'lucide-react';
-import { getHumanReadableDeviceName } from '@/lib/deviceMapping';
+import { Search, Smartphone, ShieldCheck, Cpu, Hash, Clock, ChevronRight, User, Filter, X, ChevronUp, ChevronDown, RefreshCw } from 'lucide-react';
+import { getHumanReadableDeviceName, isDeviceActive } from '@/lib/deviceMapping';
+
 import { usePagination } from '@/lib/hooks/usePagination';
 import { PaginationBar } from '../dashboard/admin/PaginationBar';
 
 interface EnrolledDevicesTableProps {
   devices: any[];
   onDeviceSelect: (device: any) => void;
+  onSync?: () => Promise<void> | void;
+  isSyncing?: boolean;
 }
 
 type SortKey = 'device_name' | 'serial_number';
 type SortDir = 'asc' | 'desc';
 
-export function EnrolledDevicesTable({ devices, onDeviceSelect }: EnrolledDevicesTableProps) {
+export function EnrolledDevicesTable({ devices, onDeviceSelect, onSync, isSyncing = false }: EnrolledDevicesTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPlatform, setFilterPlatform] = useState('all');
   const [sortKey, setSortKey] = useState<SortKey>('device_name');
@@ -27,6 +30,7 @@ export function EnrolledDevicesTable({ devices, onDeviceSelect }: EnrolledDevice
   };
 
   const filteredDevices = devices.filter(d => {
+    if (!isDeviceActive(d)) return false;
     const mappedModelName = getHumanReadableDeviceName(d.product_name) || 
                             getHumanReadableDeviceName(d.model_name) || 
                             getHumanReadableDeviceName(d.model) || 
@@ -79,7 +83,7 @@ export function EnrolledDevicesTable({ devices, onDeviceSelect }: EnrolledDevice
           <div>
             <h2 className="text-xl font-bold text-slate-800 dark:text-white">Enrolled Devices</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Manage and monitor all devices enrolled in the MDM system.
+              Manage and monitor all active devices enrolled in the MDM system.
             </p>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -112,6 +116,17 @@ export function EnrolledDevicesTable({ devices, onDeviceSelect }: EnrolledDevice
                 title="Clear filters"
               >
                 <X size={16} />
+              </button>
+            )}
+            {onSync && (
+              <button
+                onClick={onSync}
+                disabled={isSyncing}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm transition-all shadow-[0_2px_8px_rgba(37,99,235,0.25)] disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                title="Sync devices from MDM with Credifon"
+              >
+                <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
+                <span>{isSyncing ? "Syncing..." : "Sync with MDM"}</span>
               </button>
             )}
           </div>

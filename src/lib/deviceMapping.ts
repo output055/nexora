@@ -111,3 +111,17 @@ export function getHumanReadableDeviceName(productName: string | undefined): str
   
   return null;
 }
+
+/**
+ * Helper to determine whether an MDM device record is active and not removed/unmanaged.
+ */
+export function isDeviceActive(d: any): boolean {
+  if (!d) return false;
+  if (d.is_removed === true || d.is_removed === 'true') return false;
+  if (typeof d.status === 'string') {
+    const s = d.status.toLowerCase();
+    if (s === 'removed' || s === 'unmanaged' || s === 'disenrolled' || s === 'retired') return false;
+  }
+  if (d.status === 3 || d.enrollment_status === 3) return false;
+  return true;
+}

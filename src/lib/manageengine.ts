@@ -14,6 +14,8 @@
  */
 
 import { createServiceRoleSupabaseClient } from './supabase';
+import { isDeviceActive } from './deviceMapping';
+export { isDeviceActive };
 
 export interface ZohoTokenResponse {
   access_token: string;
@@ -153,10 +155,18 @@ async function manageEngineFetch(url: string, options: any = {}, retry = true): 
  * 
  * @returns {Promise<any>} The device JSON payload from ManageEngine.
  */
-export async function fetchManageEngineDevices(): Promise<any> {
+
+export async function fetchManageEngineDevices(options?: { excludeRemoved?: boolean; forceRefresh?: boolean }): Promise<any> {
   try {
     const baseUrl = process.env.MDM_API_URL || 'https://mdm.manageengine.com';
-    const url = `${baseUrl}/api/v1/mdm/devices`;
+    const excludeRemoved = options?.excludeRemoved ?? true;
+    const url = excludeRemoved 
+      ? `${baseUrl}/api/v1/mdm/devices?exclude_removed=true` 
+      : `${baseUrl}/api/v1/mdm/devices`;
+
+    if (options?.forceRefresh) {
+      await getValidAccessToken(true);
+    }
 
     const response = await manageEngineFetch(url, {
       method: 'GET',
@@ -172,6 +182,11 @@ export async function fetchManageEngineDevices(): Promise<any> {
     }
 
     const data = await response.json();
+    
+    if (excludeRemoved && data && Array.isArray(data.devices)) {
+      data.devices = data.devices.filter(isDeviceActive);
+    }
+
     return data;
 
   } catch (error) {
