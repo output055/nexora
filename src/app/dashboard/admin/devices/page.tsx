@@ -7,6 +7,7 @@ import { Plus, Smartphone, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { syncMdmDevicesAction } from '@/app/actions/devices';
 import { DeviceTable } from '@/components/dashboard/admin/DeviceTable';
+import { getCalculatedPaymentStatus } from '@/lib/utils';
 import type { Customer, Device } from '@/types';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 
@@ -63,8 +64,15 @@ export default function AdminDevicesPage() {
     setDevices((prev) => prev.map((d) => (d.id === id ? { ...d, ...updates } : d)));
   };
 
-  const totalDevices = devices.length;
-  const lockedDevices = devices.filter((d) => d.payment_status === 'overdue').length;
+  const activeFinancedDevices = devices.filter((d) => {
+    const status = getCalculatedPaymentStatus(d.payment_status, d.remaining_balance, d.next_payment_date);
+    return status !== 'completed';
+  });
+  const lockedDevices = activeFinancedDevices.filter((d) => {
+    const status = getCalculatedPaymentStatus(d.payment_status, d.remaining_balance, d.next_payment_date);
+    return status === 'overdue';
+  }).length;
+  const activeCount = activeFinancedDevices.length - lockedDevices;
 
   return (
     <motion.div
@@ -79,7 +87,7 @@ export default function AdminDevicesPage() {
         <h3 className="text-lg font-semibold text-white">Device Management</h3>
         {!loading && (
           <span className="text-sm text-slate-500 font-medium">
-            <span className="text-red-400">{lockedDevices} locked</span> · {totalDevices - lockedDevices} active
+            <span className="text-red-400">{lockedDevices} locked</span> · {activeCount} active
           </span>
         )}
         </div>

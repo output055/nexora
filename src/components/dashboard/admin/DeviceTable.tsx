@@ -70,6 +70,9 @@ export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
           d.customers?.phone_number.includes(q);
         const matchPlatform = filterPlatform === 'all' || d.os_platform === filterPlatform;
         const calcStatus = getCalculatedPaymentStatus(d.payment_status, d.remaining_balance, d.next_payment_date);
+        // Exclude completed devices from Device Management
+        if (calcStatus === 'completed') return false;
+
         const matchLock =
           filterLock === 'all' ||
           (filterLock === 'locked' && calcStatus === 'overdue') ||
@@ -256,13 +259,11 @@ export function DeviceTable({ devices, onDeviceUpdate }: DeviceTableProps) {
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
                           status === 'overdue'
                             ? 'bg-red-500/15 text-red-400'
-                            : status === 'completed'
-                              ? 'bg-amber-500/15 text-amber-400'
-                              : 'bg-emerald-500/15 text-emerald-400'
+                            : 'bg-emerald-500/15 text-emerald-400'
                         }`}>
                           {isPaystackReviewer 
                             ? (status === 'overdue' ? 'Suspended' : 'Active') 
-                            : (status === 'overdue' ? 'Overdue' : status === 'completed' ? 'Completed' : 'Current')
+                            : (status === 'overdue' ? 'Overdue' : 'Current')
                           }
                         </span>
                       );
